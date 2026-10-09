@@ -78,6 +78,12 @@ body { overflow: hidden; }
 
 button, input, select, textarea { font: inherit; color: inherit; }
 button { -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+/* Text fields keep the browser's own touch and selection handling. In iOS
+ * home-screen apps a field that inherits touch-action or user-select from
+ * an ancestor can stop bringing up the keyboard (it still works in Safari). */
+input, textarea, select, [contenteditable] {
+  touch-action: auto; -webkit-user-select: text; user-select: text; -webkit-touch-callout: default;
+}
 a { color: var(--accent); text-decoration: none; }
 .num { font-variant-numeric: tabular-nums; }
 .muted { color: var(--muted); }
