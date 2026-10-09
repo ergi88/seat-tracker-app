@@ -8,6 +8,7 @@
   import Events from './routes/Events.svelte';
   import Event from './routes/Event.svelte';
   import AddRequest from './routes/AddRequest.svelte';
+  import MapPage from './routes/MapPage.svelte';
   import Money from './routes/Money.svelte';
   import Inbox from './routes/Inbox.svelte';
   import Settings from './routes/Settings.svelte';
@@ -47,22 +48,23 @@
       {#if route.name === 'now'}<Now />
       {:else if route.name === 'events'}<Events />
       {:else if route.name === 'event'}<Event key={route.arg} />
-      {:else if route.name === 'add'}<AddRequest eventKey={route.params.event || ''} />
+      {:else if route.name === 'add'}<AddRequest eventKey={route.params.event || ''} sec={route.params.sec || ''} />
+      {:else if route.name === 'map'}<MapPage key={route.arg} />
       {:else if route.name === 'money'}<Money />
       {:else if route.name === 'inbox'}<Inbox />
       {:else if route.name === 'settings'}<Settings />
       {/if}
     {/key}
   </div>
-  {#if route.name !== 'add'}<TabBar />{/if}
+  {#if route.name !== 'add' && route.name !== 'map'}<TabBar />{/if}
 
   {#if sheet}
     {#key sheet}
-      {#if sheet.kind === 'request'}<RequestSheet id={sheet.id} />
-      {:else if sheet.kind === 'sector'}<SectorSheet eventKey={sheet.eventKey} sectorId={sheet.sectorId} />
+      {#if sheet.kind === 'request'}<RequestSheet id={sheet?.id} />
+      {:else if sheet.kind === 'sector'}<SectorSheet eventKey={sheet?.eventKey} sectorId={sheet?.sectorId} table={sheet?.table} />
       {:else if sheet.kind === 'mute'}<MuteSheet />
-      {:else if sheet.kind === 'message'}<MessageSheet eventKey={sheet.eventKey} section={sheet.section} />
-      {:else if sheet.kind === 'listing'}<ListingSheet id={sheet.id} />
+      {:else if sheet.kind === 'message'}<MessageSheet eventKey={sheet?.eventKey} section={sheet?.section} />
+      {:else if sheet.kind === 'listing'}<ListingSheet id={sheet?.id} />
       {/if}
     {/key}
   {/if}

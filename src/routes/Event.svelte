@@ -3,6 +3,8 @@
   import Icon from '../ui/Icon.svelte';
   import RequestCard from '../ui/RequestCard.svelte';
   import Banners from '../ui/Banners.svelte';
+  import StadiumMap from '../ui/StadiumMap.svelte';
+  import { venueFor } from '../lib/venues.js';
   import { SK } from '../lib/sk.js';
   import { store } from '../lib/store.svelte.js';
   import { router, href } from '../lib/router.svelte.js';
@@ -18,6 +20,8 @@
   const mine = $derived(v ? v.requests.filter(r => r.eventKey === key) : []);
   const open = $derived(mine.filter(r => !r.done));
   const done = $derived(mine.filter(r => r.done));
+  const venue = $derived(venueFor(ev));
+  const myListings = $derived(v ? v.listings.filter(l => l.eventKey === key) : []);
 
   /* sectors: the searched ones, else the ones with free seats or wanted */
   const sectors = $derived.by(() => {
@@ -58,6 +62,13 @@
       <span class="chip">{ev.autoEvery ? `auto-check every ${ev.autoEvery} min` : 'auto-check off'}</span>
       {#if ev.scanner}<span class="chip accent">{ev.scanner} is scanning</span>{/if}
     </div>
+
+    {#if venue}
+      <a class="stadium" href={href.map(key)} aria-label="Open the {venue.name} map">
+        <div class="pic"><StadiumMap {venue} event={ev} requests={mine} listings={myListings} interactive={false} /></div>
+        <div class="cap"><span><b>{venue.name}</b><span class="muted small">Free seats, your requests and listings by section</span></span><span class="open">Open map <Icon name="chev" size={16} /></span></div>
+      </a>
+    {/if}
 
     {#if ev.health && ev.health.failing}
       <div class="banner bad"><span><b>Scans failing since {clock(ev.health.firstFailAt)}</b>{ev.health.lastError || ''}</span></div>
@@ -106,6 +117,12 @@
 </Page>
 
 <style>
+  .stadium { display: block; margin-top: 14px; border-radius: var(--r-card); overflow: hidden; background: var(--panel); box-shadow: 0 1px 0 var(--line); color: var(--ink); }
+  .stadium:active { filter: brightness(.97); }
+  .pic { height: 210px; background: var(--map-bg); padding: 6px; }
+  .cap { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); }
+  .cap > span:first-child { display: grid; }
+  .open { display: inline-flex; align-items: center; gap: 2px; color: var(--accent); font-weight: 650; font-size: 14px; white-space: nowrap; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
   .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 99px; background: var(--panel); font-size: 13px; color: var(--muted); box-shadow: 0 1px 0 var(--line); }
   .chip.accent { background: var(--accent-soft); color: var(--accent); }

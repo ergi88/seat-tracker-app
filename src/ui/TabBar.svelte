@@ -10,7 +10,7 @@
     { name: 'inbox', label: 'Inbox', icon: 'inbox' }
   ];
 
-  const active = $derived(router.route.name === 'event' || router.route.name === 'add' ? 'events'
+  const active = $derived(['event', 'add', 'map'].includes(router.route.name) ? 'events'
     : router.route.name === 'settings' ? router.lastTab : router.route.name);
   const attention = $derived(store.view ? store.view.attention.length : 0);
   const unread = $derived.by(() => {

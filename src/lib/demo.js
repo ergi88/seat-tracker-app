@@ -4,6 +4,8 @@
  * build never includes it. Also the fixture of tests/model.test.js.
  * ------------------------------------------------------------------ */
 import { emptyMirror } from './shapes.js';
+import { VENUES } from './venues.js';
+import { SK } from './sk.js';
 
 export const ME = 'u-me';
 export const MATE = 'u-mate';
@@ -27,6 +29,81 @@ function packed(sec, rows, at) {
   };
 }
 
+/* every sector eBileta sells at Air Albania; E105, E106, W105, N101 and
+ * S203 keep the ids the requests below point at */
+const FIXED = { E105: '11', E106: '12', W105: '13', N101: '14', S203: '15' };
+const SOLD = new Set(['E205', 'E206', 'E207', 'E104', 'V VIP', 'SKYBOX', 'MEDIA']);
+function airAlbaniaSectors() {
+  const v = VENUES.find(x => x.id === 'air-albania');
+  return [...v.sections.map(s => s.code), ...v.offMap].map((code, i) => ({
+    id: FIXED[code] || String(100 + i), code, name: code.length <= 5 ? 'TRIBUNA ' + code : code,
+    meta: { idSM: '900', tipoM: '1', status: SOLD.has(code) ? 'soldout' : 'high' }
+  }));
+}
+/* a made-up but steady spread of free seats: the same picture every time */
+function freeSeats(code) {
+  let h = 0;
+  for (const ch of code) h = (h * 31 + ch.charCodeAt(0)) % 9973;
+  const pick = h % 10;
+  return pick < 2 ? 0 : pick < 4 ? h % 9 + 1 : pick < 7 ? h % 40 + 10 : h % 300 + 50;
+}
+
+/* Max Amini at Pallati i Kongreseve: Posttick's real blocks and the real
+ * price categories (27 Nov), each row of a block at one price */
+const MAX_KEY = 'posttick:max-amini-tirana';
+const MAX_CATS = {
+  1: { key: '1', label: 'CAT 1', color: '#CD254A', price: 245 }, 2: { key: '2', label: 'CAT 2', color: '#E9803D', price: 219 },
+  3: { key: '3', label: 'CAT 3', color: '#FCA700', price: 144 }, 4: { key: '4', label: 'CAT 4', color: '#05A588', price: 95 },
+  11: { key: '11', label: 'CAT 5', color: '#86B737', price: 85 }, 5: { key: '5', label: 'CAT 6', color: '#3190ED', price: 75 },
+  10: { key: '10', label: 'CAT 7', color: '#0D67BF', price: 65 }
+};
+const MAX_BLOCKS = { A1: ['2', '3', '4'], A2: ['1', '2', '3'], A3: ['2', '3', '4'], A4: ['3', '4'], A5: ['1', '2', '3'], A6: ['3', '4'],
+  B: ['4', '11'], C: ['4', '11'], D1: ['11', '5', '10'], D2: ['11', '5', '10'], D3: ['11', '5', '10'] };
+function maxScan(code, at) {
+  const prices = MAX_BLOCKS[code];
+  const rows = [];
+  for (let r = 1; r <= 9; r++) {
+    const cat = prices[Math.min(prices.length - 1, Math.floor((r - 1) / 3))];
+    const s = [];
+    /* runs of free and taken seats, as a real sale leaves them: a steady
+     * pseudo-random walk, seeded by block and row */
+    let seed = 7;
+    for (const ch of code + '/' + r) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const keep = code === 'A2' && r <= 3 ? 0.88 : 0.72;                      // A2's dearest rows nearly gone
+    let free = rnd() > 0.6;
+    for (let n = 1; n <= 18; n++) {
+      if (n > 1 && rnd() > keep) free = !free;
+      s.push([String(n), cat, free ? 1 : 0, n === 10 ? 1 : 0, `Block ${code}-${r}-${n}`]);   // an aisle after seat 9
+    }
+    rows.push({ r: String(r), s });
+  }
+  return { sec: 'Block ' + code, at, rows };
+}
+
+/* Senidah on eFinity: the real stands, the standing areas, and 125 bar
+ * tables gathered into "Bar Table" (one row per table, free only whole) */
+const SEN_KEY = 'efinity:senidah';
+const SEN_STANDS = ['A TRIBINE', 'B TRIBINE', 'C TRIBINE', 'D TRIBINE', 'E TRIBINE', 'F TRIBINE', 'F DOLE', 'G TRIBINE', 'H TRIBINE', 'I TRIBINE', 'J TRIBINE', 'K TRIBINE'];
+const SEN_STANDING = ['PARTER', 'FAN PIT DESNO', 'FAN PIT LEVO'];
+function senidahSectors() {
+  return [
+    ...SEN_STANDS.map(code => ({ id: code, code, name: code, meta: { seated: true, seats: 200, price: code.startsWith('F') ? 3290 : 2290 } })),
+    ...SEN_STANDING.map(code => ({ id: code, code, name: code, meta: { seated: false, seats: 0, price: 2090 } })),
+    { id: 'BAR TABLES', code: 'Bar Table', name: 'Bar Table · every barski sto', meta: { bar: true, seated: true, tables: 125, perTable: 6, seats: 750, price: 4000 } },
+    ...Array.from({ length: 125 }, (_, i) => ({ id: 'BARSKI STO ' + (i + 1), code: 'BARSKI STO ' + (i + 1), name: 'BARSKI STO ' + (i + 1), meta: { seated: true, seats: 6, price: 4000 } }))
+  ];
+}
+/* a steady spread of whole free tables, more of them away from the stage */
+function barScan(at) {
+  const rows = [];
+  for (let n = 1; n <= 125; n++) {
+    const free = ((n * 37) % 11) < (n > 75 ? 4 : 2);
+    rows.push({ r: String(n), s: Array.from({ length: 6 }, (_, i) => [String(i + 1), null, free ? 1 : 0, 0, `BAR-${n}-${i + 1}`]) });
+  }
+  return { sec: 'BAR TABLES', at, rows };
+}
+
 export function demoMirror(now = Date.now()) {
   const min = 60000;
   const day = new Date(now).toISOString().slice(0, 10);
@@ -40,23 +117,17 @@ export function demoMirror(now = Date.now()) {
   m.events = {
     'ebileta:2160': {
       key: 'ebileta:2160', num: 1, site: 'ebileta', siteId: '2160', title: 'Albania – Serbia', date: '2026-11-14 20:45',
-      sectors: [
-        { id: '11', code: 'E105', name: 'TRIBUNA E105', meta: { idSM: '900', tipoM: '1' } },
-        { id: '12', code: 'E106', name: 'TRIBUNA E106', meta: { idSM: '900', tipoM: '1' } },
-        { id: '13', code: 'W105', name: 'TRIBUNA W105', meta: { idSM: '900', tipoM: '1' } },
-        { id: '14', code: 'N101', name: 'TRIBUNA N101', meta: { idSM: '900', tipoM: '1' } },
-        { id: '15', code: 'S203', name: 'TRIBUNA S203', meta: { idSM: '900', tipoM: '1' } }
-      ],
+      sectors: airAlbaniaSectors(),
       extra: { idSM: '900' }, cats: {}, autoMin: null
     },
-    'posttick:max-amini-tirana': {
-      key: 'posttick:max-amini-tirana', num: 2, site: 'posttick', siteId: 'max-amini-tirana', title: 'Max Amini · Tirana', date: '2026-11-27',
-      sectors: [{ id: 'A', code: 'A', name: 'Block A', meta: {} }, { id: 'B', code: 'B', name: 'Block B', meta: {} }],
-      extra: { currency: '€' }, cats: { 1: { key: '1', label: 'CAT 1', price: 65 }, 2: { key: '2', label: 'CAT 2', price: 55 } }, autoMin: 2
+    [MAX_KEY]: {
+      key: MAX_KEY, num: 2, site: 'posttick', siteId: 'max-amini-tirana', title: 'Max Amini - 27.11.2026 - 6:30 PM - Pallati i Kongreseve - Tirana - Albania', date: '',
+      sectors: Object.keys(MAX_BLOCKS).map(code => ({ id: 'Block ' + code, code, name: 'Block ' + code, meta: { seats: 162 } })),
+      extra: { currency: '€' }, cats: MAX_CATS, autoMin: 2
     },
-    'efinity:senidah': {
-      key: 'efinity:senidah', num: 3, site: 'efinity', siteId: 'senidah', title: 'Senidah', date: '2026-10-22',
-      sectors: [{ id: 'C2', code: 'C2', name: 'C2', meta: { price: 4500 } }], extra: {}, cats: {}, autoMin: null
+    [SEN_KEY]: {
+      key: SEN_KEY, num: 3, site: 'efinity', siteId: 'senidah', title: 'Senidah', date: '2026-10-22',
+      sectors: senidahSectors(), extra: {}, cats: {}, autoMin: null
     }
   };
   const req = (id, userId, eventKey, num, sec, qty, extra) => ({
@@ -67,8 +138,9 @@ export function demoMirror(now = Date.now()) {
     r1: req('r1', ME, 'ebileta:2160', 7, '12', 6, { client: 'Ana K.', listing: '20000000001' }),
     r2: req('r2', ME, 'ebileta:2160', 8, '11', 4, { client: 'Besi' }),
     r3: req('r3', ME, 'ebileta:2160', 9, '14', 2, {}),
-    r4: req('r4', ME, 'posttick:max-amini-tirana', 10, 'B', 3, { cats: ['1', '2'] }),
-    r5: req('r5', ME, 'efinity:senidah', 11, 'C2', 2, { done: true }),
+    r4: req('r4', ME, MAX_KEY, 10, 'Block A2', 3, { cats: ['1', '2'] }),
+    r5: req('r5', ME, SEN_KEY, 11, 'C TRIBINE', 2, { done: true }),
+    r7: req('r7', ME, SEN_KEY, 12, 'BAR TABLES', 6, { client: 'Drini' }),
     r6: req('r6', MATE, 'ebileta:2160', 2, '12', 5, {})
   };
   m.state = {
@@ -78,14 +150,36 @@ export function demoMirror(now = Date.now()) {
     r4: { status: 'OK', options: 9, free: 31, pendingGone: false, alertLog: {}, scanAt: now - 6 * min, version: 1 }
   };
   const meta = (available, total, longest, at, by, price) => ({ at, by, summary: Object.assign({ available, total, longest }, price ? { price } : {}) });
+  const stadium = {};
+  for (const s of m.events['ebileta:2160'].sectors) {
+    if (s.meta.status === 'soldout' || ['N207', 'E201', 'S201', 'TETRAPLEGJIK V'].includes(s.code)) continue;   // never read
+    const free = freeSeats(s.code);
+    stadium[s.id] = meta(free, 300, free ? Math.max(1, Math.min(free, free % 14 + 1)) : 0, now - 2 * min, 'Office PC',
+      { min: 2000, max: s.code.startsWith('E2') || s.code.startsWith('W') ? 5000 : 3000, currency: 'ALL' });
+  }
+  Object.assign(stadium, {
+    11: meta(14, 320, 4, now - 2 * min, 'Office PC', { min: 3000, max: 4000, currency: 'ALL' }),
+    12: meta(485, 900, 22, now - 2 * min, 'Office PC', { min: 3000, max: 4000, currency: 'ALL' }),
+    13: meta(43, 420, 8, now - 2 * min, 'Office PC'),
+    14: meta(3, 300, 1, now - 2 * min, 'Office PC')
+  });
+  const bar = barScan(now - 4 * min);
+  const freeTables = bar.rows.filter(r => r.s[0][2]).length;
+  const senidah = {
+    'BAR TABLES': { at: bar.at, by: 'Office PC', summary: { available: freeTables * 6, total: 750, longest: freeTables ? 6 : 0 } }
+  };
+  for (const code of SEN_STANDS) { const f = freeSeats(code); senidah[code] = meta(f, 200, f ? Math.min(f, f % 12 + 1) : 0, now - 4 * min, 'Office PC'); }
+  for (const code of SEN_STANDING) senidah[code] = { at: now - 4 * min, by: 'Office PC', summary: { unmapped: true, note: 'standing area' } };
+  m.state.r7 = { status: 'OK', options: freeTables, free: freeTables * 6, pendingGone: false, alertLog: {}, scanAt: bar.at, version: 1 };
   m.scanMeta = {
-    'ebileta:2160': {
-      11: meta(14, 320, 4, now - 2 * min, 'Office PC', { min: 3000, max: 4000, currency: 'ALL' }),
-      12: meta(485, 900, 22, now - 2 * min, 'Office PC', { min: 3000, max: 4000, currency: 'ALL' }),
-      13: meta(43, 420, 8, now - 2 * min, 'Office PC'),
-      14: meta(3, 300, 1, now - 2 * min, 'Office PC')
-    },
-    'posttick:max-amini-tirana': { B: meta(31, 120, 6, now - 6 * min, 'Laptop') }
+    [SEN_KEY]: senidah,
+    'ebileta:2160': stadium,
+    [MAX_KEY]: Object.fromEntries(Object.keys(MAX_BLOCKS).map(code => {
+      const scan = maxScan(code, now - 6 * min);
+      const v = SK.rules.blocksFor(scan, null);
+      const freeCats = [...new Set(scan.rows.flatMap(r => r.s.filter(p => p[2]).map(p => p[1])))];
+      return ['Block ' + code, { at: scan.at, by: 'Laptop', summary: { available: v.available, total: v.total, longest: v.longest, cats: freeCats } }];
+    }))
   };
   m.leases = { 'scan:ebileta:2160': { deviceId: 'pc1', userId: ME, expiresAt: now + 30000 } };
   m.listings = {
@@ -123,6 +217,8 @@ export function demoMirror(now = Date.now()) {
 }
 
 export const demoScans = (now = Date.now()) => ({
+  [SEN_KEY]: { 'BAR TABLES': barScan(now - 4 * 60000) },
+  [MAX_KEY]: Object.fromEntries(Object.keys(MAX_BLOCKS).map(code => ['Block ' + code, maxScan(code, now - 6 * 60000)])),
   'ebileta:2160': {
     12: packed('12', [['1', 'oooooo|ooooo..ooo'], ['2', 'oooo..oooooooooo'], ['3', '..oo.ooo|oooooo'], ['4', 'oooooooooooooooooooooo']], now - 2 * 60000)
   }

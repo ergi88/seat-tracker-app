@@ -120,6 +120,16 @@ export function byNearest(now = Date.now()) {
   };
 }
 
+/* The extension's request order (ui/components.js sortRequests): done last,
+ * then the ones a scan has judged before the ones it has not, then
+ * 'options' = fewest options first (the tightest needs you first), or
+ * 'number' = by request number. */
+export function requestOrder(mode) {
+  const unscanned = r => (r.status === SK.rules.STATUS.NONE ? 1 : 0);
+  if (mode === 'number') return (a, b) => (a.done - b.done) || (a.num - b.num);
+  return (a, b) => (a.done - b.done) || (unscanned(a) - unscanned(b)) || ((a.options || 0) - (b.options || 0)) || (a.num - b.num);
+}
+
 /* OK / LOW / SPLIT / SHORT / NOT SCANNED -> the class the UI colours by */
 export function tone(status) {
   if (status === 'OK') return 'ok';
@@ -210,8 +220,7 @@ export function buildView(m, me, opts = {}) {
       listingUrl: r.listing ? SK.util.viagogoUrl(r.listing) : '',
       sectorUrl: sectorUrlOf(ev, sector)
     });
-  }).sort((a, b) => byNearest(now)(a, b) || a.eventNum - b.eventNum
-    || (SK.rules.RANK[b.status] || 0) - (SK.rules.RANK[a.status] || 0) || a.num - b.num);
+  }).sort((a, b) => byNearest(now)(a, b) || a.eventNum - b.eventNum || requestOrder(settings.listSort)(a, b));
 
   const devices = m.devices.map(d => ({
     id: d.id, name: d.name || 'unnamed PC', owner: ownerName(d.userId), lastSeen: d.lastSeen,
@@ -302,11 +311,17 @@ export function buildView(m, me, opts = {}) {
 
   /* the toolbar badge's rule: open, not muffled, and LOW / SPLIT / SHORT */
   const open = requests.filter(r => !r.done && !r.muffled);
-  const attention = open.filter(r => r.tone === 'low' || r.tone === 'bad');
+  /* what needs you, across every event, in the same order */
+  const attention = open.filter(r => r.tone === 'low' || r.tone === 'bad').sort(requestOrder(settings.listSort));
   const today = ratesAt(m, now);
 
+  /* teammates' active listings: their price and tickets, never their payout */
+  const teamListings = Object.values(m.teamPrices)
+    .filter(t => t.userId !== me && ACTIVE_LISTING.test(t.status || 'active'))
+    .map(t => Object.assign({}, t, { owner: ownerName(t.userId) }));
+
   return {
-    me, settings, events, requests, listings, sales, devices, team,
+    me, settings, events, requests, listings, sales, devices, team, teamListings,
     open, attention,
     pcsOnline: devices.filter(d => d.online),
     snoozeUntil: (m.profiles[me] || {}).snoozeUntil || 0,

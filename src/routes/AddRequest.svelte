@@ -11,7 +11,7 @@
   import { router, href } from '../lib/router.svelte.js';
   import { addRequest } from '../lib/actions.js';
 
-  let { eventKey = '' } = $props();
+  let { eventKey = '', sec = '' } = $props();
 
   const v = $derived(store.view);
   const events = $derived(v ? v.events.filter(e => !e.archived || e.key === eventKey) : []);
@@ -19,7 +19,8 @@
   let evKey = $state(eventKey);                      // the route remounts this page, so the first value is the one
   const ev = $derived(events.find(e => e.key === evKey) || null);
 
-  let secText = $state('');
+  // svelte-ignore state_referenced_locally
+  let secText = $state(sec);                         // "Request here" on a sector hands its code over
   let secId = $state('');
   let qty = $state(2);
   let cats = $state([]);
@@ -35,6 +36,10 @@
 
   $effect(() => {
     if (v && warn === null) { warn = v.settings.defaultWarn; opts = v.settings.defaultOpts; together = v.settings.together; }
+  });
+  /* the handed-over code, once the event's sectors are known */
+  $effect(() => {
+    if (sec && !secId && ev) { const hit = ev.sectors.find(s => s.code === sec); if (hit) secId = hit.id; }
   });
 
   const suggestions = $derived.by(() => {

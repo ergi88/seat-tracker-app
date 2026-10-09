@@ -7,17 +7,17 @@ import { demoMirror, demoScans, ME } from '../src/lib/demo.js';
 const NOW = Date.parse('2026-10-09T12:00:00Z');
 const view = (opts = {}) => buildView(demoMirror(NOW), ME, Object.assign({ now: NOW }, opts));
 
-test('only my requests: nearest event first, worst first within it', () => {
+test('only my requests: nearest event first, fewest options first within it', () => {
   const v = view();
-  /* Senidah 22 Oct, then Albania – Serbia 14 Nov, then Max Amini 27 Nov */
-  assert.deepEqual(v.requests.map(r => r.id), ['r5', 'r3', 'r2', 'r1', 'r4']);
+  /* Senidah 22 Oct (r7 open, r5 done last), then Albania – Serbia 14 Nov (r3 0 options, r2 2, r1 36), then Max Amini 27 Nov */
+  assert.deepEqual(v.requests.map(r => r.id), ['r7', 'r5', 'r3', 'r2', 'r1', 'r4']);
   assert.ok(v.requests.every(r => r.userId === ME));
 });
 
 test('needs attention = open LOW / SPLIT / SHORT, like the toolbar badge', () => {
   const v = view();
   assert.deepEqual(v.attention.map(r => r.id).sort(), ['r2', 'r3']);
-  assert.equal(v.open.length, 4);                    // r5 is done
+  assert.equal(v.open.length, 5);                    // r5 is done
 });
 
 test('profit of a request matches the README example (+13,812 L, x1.6)', () => {
@@ -123,4 +123,26 @@ test('real events sort by the date in their titles, or their viagogo listing', (
   const v = buildView(m, ME, { now: NOW });
   assert.deepEqual(v.events.map(e => e.num), [8, 3, 11, 9, 10, 2, 6]);
   assert.equal(new Date(v.events[0].time).getHours(), 18);         // 6:45 PM read from the title
+});
+
+test('request order follows the setting, as in the extension: options or number; done last', () => {
+  const m = demoMirror(NOW);
+  m.state.r2.options = 40;                                 // r2 now has more options than r1 (36)
+  const ids = sort => buildView(m, ME, { now: NOW, deviceSettings: { listSort: sort } }).requests
+    .filter(r => r.eventKey === 'ebileta:2160').map(r => r.id);
+  assert.deepEqual(ids('options'), ['r3', 'r1', 'r2']);    // 0, 36, 40
+  assert.deepEqual(ids('number'), ['r1', 'r2', 'r3']);     // #7, #8, #9
+});
+
+test('needs attention: fewest options first across events', () => {
+  const v = view();
+  assert.deepEqual(v.attention.map(r => r.options), [...v.attention.map(r => r.options)].sort((a, b) => a - b));
+});
+
+test('Senidah: the bar tables are one sector, the standing areas have no seat data', () => {
+  const e = view().events.find(x => x.key === 'efinity:senidah');
+  const bar = e.sectors.find(s => s.id === 'BAR TABLES');
+  assert.equal(bar.code, 'Bar Table');
+  assert.equal(bar.summary.available % 6, 0);                       // whole tables only
+  assert.ok(e.sectors.find(s => s.code === 'PARTER').summary.unmapped);
 });

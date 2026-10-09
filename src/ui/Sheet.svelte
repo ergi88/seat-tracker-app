@@ -13,6 +13,11 @@
   let dragging = $state(false);
   let shown = $state(false);
   let start = null, lastY = 0, lastT = 0, speed = 0;
+  /* After a finger tap the phone also sends a click to the same spot. When
+   * that tap opened this sheet, the click lands on the scrim and would close
+   * it straight away: the scrim ignores taps for a moment after opening. */
+  const openedAt = performance.now();
+  function scrimTap() { if (performance.now() - openedAt > 400) router.closeSheet(); }
 
   onMount(() => {
     requestAnimationFrame(() => { shown = true; });
@@ -45,7 +50,7 @@
   }
 </script>
 
-<div class="scrim" class:shown onclick={() => router.closeSheet()} role="presentation"></div>
+<div class="scrim" class:shown onclick={scrimTap} role="presentation"></div>
 <div class="sheet" class:shown class:dragging bind:this={panel} tabindex="-1" role="dialog" aria-modal="true" aria-label={title}
   style:transform={shown ? `translateY(${dy}px)` : 'translateY(100%)'}>
   <!-- dragging is a shortcut; Esc, the scrim and Back close the sheet too -->

@@ -3,6 +3,7 @@
  *
  *   #/            Now          #/events         Events
  *   #/event/<key> one event    #/add?event=<key> add a request
+ *   #/map/<key>   the stadium  #/add?event=<key>&sec=<code> prefilled
  *   #/money       Money        #/inbox          Inbox
  *   #/settings    Settings
  *
@@ -13,7 +14,7 @@
 import { flushSync } from 'svelte';
 
 export const TABS = ['now', 'events', 'money', 'inbox'];
-const DEPTH = { now: 0, events: 0, money: 0, inbox: 0, settings: 1, event: 1, add: 2 };
+const DEPTH = { now: 0, events: 0, money: 0, inbox: 0, settings: 1, event: 1, add: 2, map: 2 };
 
 function parse(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
@@ -87,5 +88,6 @@ class Router {
 export const router = new Router();
 export const href = {
   event: key => '#/event/' + encodeURIComponent(key),
-  add: key => '#/add' + (key ? '?event=' + encodeURIComponent(key) : '')
+  add: key => '#/add' + (key ? '?event=' + encodeURIComponent(key) : ''),
+  map: key => '#/map/' + encodeURIComponent(key)
 };

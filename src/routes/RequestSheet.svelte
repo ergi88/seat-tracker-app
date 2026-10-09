@@ -82,7 +82,8 @@
       <h3 class="section-title">Profit</h3>
       <div class="block money">
         <div class="big {p.total >= 0 ? 'ok' : 'bad'} num">{lek(p.total, true)} <span class="small">{win(p.winRate)}</span></div>
-        <div class="kv"><span>You get a ticket</span><b class="num">{lek(p.payoutL)}</b></div>
+        <div class="kv"><span>Sell price (a ticket)</span><b class="num">{money(p.listing.price, p.currency)}</b></div>
+        <div class="kv"><span>You get a ticket</span><b class="num">{money(p.listing.payout / p.listing.tickets, p.currency)} · {lek(p.payoutL)}</b></div>
         <div class="kv"><span>A ticket cost</span><b class="num">{lek(p.costL)}{r.buy ? ` (${r.buy.source})` : ''}</b></div>
         <div class="kv"><span>Break-even</span><b class="num">{money(p.breakEven, p.currency)}</b></div>
         {#if p.atRecommended}

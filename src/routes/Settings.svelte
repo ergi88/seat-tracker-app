@@ -86,6 +86,13 @@
       {/each}
     </div>
 
+    <h2 class="section-title">Requests order</h2>
+    <div class="seg two-way">
+      {#each [['options', 'Fewest options first'], ['number', 'By number']] as [k, label]}
+        <button class:on={s.listSort === k} onclick={() => save({ listSort: k })}>{label}</button>
+      {/each}
+    </div>
+
     <h2 class="section-title">Phone alerts (ntfy)</h2>
     <div class="group pad">
       <label class="field"><span>Your ntfy topic</span>
@@ -163,6 +170,7 @@
   .pad { padding: 14px 16px; display: grid; gap: 12px; }
   .seg { display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border-radius: 11px; background: var(--softer); }
   .seg button { min-height: 34px; border: 0; border-radius: 9px; background: none; font-weight: 600; font-size: 14px; color: var(--muted); cursor: pointer; }
+  .seg.two-way { grid-template-columns: 1fr 1fr; }
   .seg button.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px var(--shadow); }
   .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
   .head { min-height: 36px; font-size: 12px; color: var(--muted); font-weight: 600; }

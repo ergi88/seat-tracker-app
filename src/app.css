@@ -24,6 +24,14 @@
   --bar: rgba(255, 255, 255, .82);
   --scrim: rgba(10, 12, 16, .38);
 
+  /* the stadium map */
+  --map-bg: #ffffff; --map-edge: #e3e5ea; --map-grass: #5a8a3f;
+  --sec-unread: #eceef1; --sec-zero: #d3d7de; --sec-sold-line: #b9bec7; --sec-ink: #1f2430;
+  --sec-l1: #dce8fd; --sec-l2: #b2ccfa; --sec-l3: #5f93ef; --sec-l4: #1f5fd6;
+  --map-listing: #c026d3;
+  --map-stage: #9b9da3; --map-stage-ink: #111317;
+  --sec-off: #f4f5f7; --sec-standing: #e9e4f6;
+
   --r-card: 14px;
   --r-sheet: 18px;
   --tap: 44px;
@@ -46,6 +54,12 @@
     --shadow: rgba(0, 0, 0, .5);
     --bar: rgba(22, 24, 30, .82);
     --scrim: rgba(0, 0, 0, .55);
+    --map-bg: #1a1d24; --map-edge: #2a2f39; --map-grass: #3d6230;
+    --sec-unread: #272b34; --sec-zero: #353a45; --sec-sold-line: #4a505d; --sec-ink: #e8eaf0;
+    --sec-l1: #1f3254; --sec-l2: #24457f; --sec-l3: #3a6fd0; --sec-l4: #5b93f5;
+    --map-listing: #d946ef;
+    --map-stage: #4a4e57; --map-stage-ink: #e8eaf0;
+    --sec-off: #1f2229; --sec-standing: #2c2740;
   }
 }
 
@@ -59,6 +73,12 @@
   --shadow: rgba(0, 0, 0, .5);
   --bar: rgba(22, 24, 30, .82);
   --scrim: rgba(0, 0, 0, .55);
+  --map-bg: #1a1d24; --map-edge: #2a2f39; --map-grass: #3d6230;
+  --sec-unread: #272b34; --sec-zero: #353a45; --sec-sold-line: #4a505d; --sec-ink: #e8eaf0;
+  --sec-l1: #1f3254; --sec-l2: #24457f; --sec-l3: #3a6fd0; --sec-l4: #5b93f5;
+  --map-listing: #d946ef;
+  --map-stage: #4a4e57; --map-stage-ink: #e8eaf0;
+  --sec-off: #1f2229; --sec-standing: #2c2740;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
