@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dev-dist/
+.DS_Store
+*.local
+# never in this public repo: the team list and anything captured from the sites
+*.sql
+*.zip
+*capture*

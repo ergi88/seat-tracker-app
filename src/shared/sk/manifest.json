@@ -1,0 +1,17 @@
+{
+  "extensionVersion": "3.0.0",
+  "files": {
+    "core/config.js": "b395f6b42aacbe2bf047351f89b955cc043bda1c0090028a454a806a699e11af",
+    "core/util.js": "75017a667f7c462c230b6bb12d6c2449fdcd8ce345729923d960278bd630c5ea",
+    "core/rules.js": "fd6dabcf897d591304584ba55073f99e3a536b67e47fe388fc9f9de3abefb0ac",
+    "core/registry.js": "168aa40628d4c728ea9e33e677aa47f1d279a5dd2b71b918e18e879fa6877b2d",
+    "core/settings.js": "5c5467795c2b67cdbbd2ef7a461bf612aaadacf08c519570ed99f9d1bfa8bc85",
+    "core/profit.js": "84271da379ba29e2f6f8787039649122fd8ed60ac9de9a711caaa55fefbc48c7",
+    "core/viagogo.js": "91a3bd8445bb8728bb67a9bae3d97be639cb3f6d10acbbb658ccd7a0380b268b",
+    "core/team.js": "cbd66f06310ebca395986f1af87f8b02b9e33119c8a4de3e0c975e9cabe94a21",
+    "core/sales.js": "be791f6efa24339c91a1a82f4caee9a6a196a30cf6043795ae4b1b874de51927",
+    "sites/ebileta.js": "aed0d78efe7fed5f0bcce9c22f06154b9e2e32bd5c871f1f1a67ccb99d2308db",
+    "sites/efinity.js": "44c4752c02fc2fcfd6c271f999a29a480c42b48355f8d06f35d9df3a47e7e6b1",
+    "sites/posttick.js": "4cdd008a424b556cae97d54e291c80a0a64e6ffe230a133f2693bbff7f2da60c"
+  }
+}
