@@ -6,6 +6,7 @@
   import { router } from '../lib/router.svelte.js';
   import { saveSettings, setDisplayName, testPhone } from '../lib/actions.js';
   import { ago } from '../lib/fmt.js';
+  import { canBadge, installed, permission, askPermission, setBadge } from '../lib/badge.js';
 
   const v = $derived(store.view);
   const s = $derived(v ? v.settings : null);
@@ -43,6 +44,56 @@
     const s = Math.max(0, Math.round((store.now - store.sync.at) / 1000));
     return s < 10 ? 'just now' : s < 60 ? `${s} s ago` : ago(store.sync.at);
   });
+  /* the icon badge: what this phone allows, and a number to try it with */
+  let perm = $state(permission());
+  let badgeNum = $state(store.badgeTest ?? 5);
+  const autoCount = $derived(v ? v.attention.length : 0);
+  const PERM_TEXT = {
+    granted: 'Notifications allowed',
+    denied: 'Notifications blocked',
+    default: 'Notifications not asked yet',
+    unsupported: 'This browser has no notifications'
+  };
+  const badgeHint = $derived(
+    !canBadge() ? 'This browser cannot put a number on the app icon. On iPhone it needs iOS 16.4 or later and the app opened from the home screen.'
+      : !installed() ? 'Open the app from its home-screen icon (Share → Add to Home Screen), not from Safari: the badge only shows on an installed app.'
+        : perm === 'denied' ? 'Notifications were refused. Turn them on in the iPhone Settings → Notifications → Seat Tracker, then come back.'
+          : perm !== 'granted' ? 'iPhone shows the badge only after notifications are allowed. Press Ask for permission.'
+            : 'Set a number, then go to the home screen to see it on the icon.');
+  async function ask() {
+    perm = await askPermission();
+    store.toast(PERM_TEXT[perm], { tone: perm === 'granted' ? '' : 'bad' });
+  }
+  /* a delay lets you leave the app before the badge changes: 0 = instant */
+  let badgeDelay = $state(0);
+  let pending = $state(null);              // { n, at } while a delayed set waits
+  let pendingTimer = 0;
+  const pendingLeft = $derived(pending ? Math.max(0, Math.ceil((pending.at - store.now) / 1000)) : 0);
+  function cancelPending() { clearTimeout(pendingTimer); pending = null; }
+  $effect(() => () => clearTimeout(pendingTimer));
+  function scheduleBadge(n) {
+    n = Math.max(0, Math.min(999, Math.round(Number(n) || 0)));
+    badgeNum = n;
+    cancelPending();
+    if (!badgeDelay) { tryBadge(n); return; }
+    pending = { n, at: Date.now() + badgeDelay * 1000 };
+    pendingTimer = setTimeout(() => { pending = null; tryBadge(n); }, badgeDelay * 1000);
+    store.toast(`${n ? `Badge ${n}` : 'Clearing the badge'} in ${badgeDelay} s. Go to the home screen now.`);
+  }
+  async function tryBadge(n) {
+    n = Math.max(0, Math.min(999, Math.round(Number(n) || 0)));
+    badgeNum = n;
+    try {
+      await setBadge(n);
+      store.badgeTest = n;
+      store.toast(n ? `Badge set to ${n}. Look at the home screen.` : 'Badge cleared');
+    } catch (e) { store.toast(e.message || 'The badge could not be set', { tone: 'bad' }); }
+  }
+  function autoBadge() {
+    store.badgeTest = null;
+    store.toast(`Back to automatic: ${autoCount || 'no'} request${autoCount === 1 ? '' : 's'} needing you`);
+  }
+
   const phoneLink = $derived(s && s.phoneTopic ? `${s.ntfyServer}/${encodeURIComponent(s.phoneTopic)}` : '');
 </script>
 
@@ -78,6 +129,45 @@
       </div>
     </div>
     <p class="muted small hint">New team data arrives by itself every 15 seconds while the app is open, and the moment you open it again. Pull down on any list to sync from scratch.</p>
+
+    <h2 class="section-title">App icon badge</h2>
+    <div class="group">
+      <div class="row static">
+        <span class="grow"><span class="title">{PERM_TEXT[perm]}</span>
+          <span class="sub">{installed() ? 'Opened from the home screen' : 'Opened in the browser'} · {canBadge() ? 'badge supported' : 'no badge here'}</span></span>
+        {#if perm === 'default'}
+          <button class="btn small primary" onclick={ask}>Ask for permission</button>
+        {:else if perm !== 'unsupported'}
+          <button class="btn small" onclick={ask}>Ask again</button>
+        {/if}
+      </div>
+      <div class="row static">
+        <span class="grow"><span class="title">Showing now</span>
+          <span class="sub">{store.badgeTest === null ? `Automatic: ${autoCount} request${autoCount === 1 ? '' : 's'} needing you` : `Test number ${store.badgeTest}`}</span></span>
+        {#if store.badgeTest !== null}<button class="btn small" onclick={autoBadge}>Automatic</button>{/if}
+      </div>
+      <div class="pad">
+        <div class="badge-test">
+          <button class="btn small" onclick={() => { badgeNum = Math.max(0, (Number(badgeNum) || 0) - 1); }} aria-label="One less">−</button>
+          <input class="input num" type="number" inputmode="numeric" min="0" max="999" bind:value={badgeNum} aria-label="Badge number" />
+          <button class="btn small" onclick={() => { badgeNum = Math.min(999, (Number(badgeNum) || 0) + 1); }} aria-label="One more">+</button>
+          <button class="btn small primary" onclick={() => scheduleBadge(badgeNum)} disabled={!canBadge()}>Set badge</button>
+          <button class="btn small" onclick={() => scheduleBadge(0)} disabled={!canBadge()}>Clear</button>
+        </div>
+        <div class="seg four-way" role="group" aria-label="When to set it">
+          {#each [[0, 'Instant'], [5, '5 s'], [10, '10 s'], [30, '30 s']] as [d, label]}
+            <button class:on={badgeDelay === d} onclick={() => { badgeDelay = d; }}>{label}</button>
+          {/each}
+        </div>
+        {#if pending}
+          <div class="pending">
+            <span class="grow">{pending.n ? `Badge ${pending.n}` : 'Clearing'} in {pendingLeft} s…</span>
+            <button class="btn small" onclick={cancelPending}>Cancel</button>
+          </div>
+        {/if}
+      </div>
+    </div>
+    <p class="muted small hint">{badgeHint} A test number stays until you press Automatic or reopen the app. With a delay, press Set badge and leave the app: if the badge never appears, the iPhone paused the app before the timer ran.</p>
 
     <h2 class="section-title">Appearance</h2>
     <div class="seg">
@@ -185,4 +275,9 @@
   .center { text-align: center; margin-top: 14px; }
   .hint { margin: 8px 4px 0; }
   .sub.bad { color: var(--bad); }
+  .badge-test { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .badge-test .num { width: 72px; text-align: center; }
+  .seg.four-way { grid-template-columns: repeat(4, 1fr); }
+  .pending { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  .pending .grow { flex: 1; }
 </style>

@@ -135,7 +135,7 @@
         {#if hasOff}<span><i class="sw off"></i>Not on sale</span>{/if}
         {#if tableGrid}<span><i class="sw l3"></i>Table free</span>{/if}
         <span><i class="sw req"></i>Your request</span>
-        <span><i class="dotl"></i>Your listings</span>
+        <span><i class="dotl"></i>Tickets you want</span>
       </div>
       {#if offMap.length}
         <div class="off">

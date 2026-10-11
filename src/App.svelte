@@ -1,4 +1,5 @@
 <script>
+  import { canBadge, setBadge } from './lib/badge.js';
   import { store } from './lib/store.svelte.js';
   import { router } from './lib/router.svelte.js';
   import TabBar from './ui/TabBar.svelte';
@@ -30,11 +31,12 @@
     document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0f1115' : '#f2f3f6');
   });
 
-  /* the icon badge counts what needs you, like the extension's toolbar badge */
+  /* the icon badge counts what needs you, like the extension's toolbar
+   * badge, unless a test number was set in Settings */
   $effect(() => {
-    const n = store.view ? store.view.attention.length : 0;
-    if (!('setAppBadge' in navigator)) return;
-    (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(() => {});
+    const n = store.badgeTest ?? (store.view ? store.view.attention.length : 0);
+    if (!canBadge()) return;
+    setBadge(n).catch(() => {});
   });
 </script>
 

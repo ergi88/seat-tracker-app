@@ -2,7 +2,8 @@
   /* A stadium, every section coloured by what the team's last scans found:
    * blue by how many seats are free, grey with none, hatched when the site
    * says sold out, pale when nobody has read it. Your requests outline their
-   * section in their status colour; your listings put a pink count on it.
+   * section in their status colour and put a pink count of the tickets they
+   * ask for on it; a section with only listings counts their tickets.
    *
    * Interactive: drag to pan, pinch / wheel / double-tap / + − to zoom, tap
    * a section to open it. As a preview (interactive=false) it is a picture
@@ -52,6 +53,10 @@
       const mine = s ? requests.filter(r => !r.done && String(r.sec) === String(s.id)) : [];
       const tone = mine.reduce((t, r) => (TONE_RANK[r.tone] > TONE_RANK[t] ? r.tone : t), 'none');
       const lst = s ? listings.filter(l => String(l.sectorId) === String(s.id)) : [];
+      /* tickets wanted here, else tickets listed here: one request per section
+       * is the usual, so a count of them would read 1 everywhere */
+      const wantedQty = mine.reduce((n, r) => n + (Number(r.qty) || 0), 0);
+      const listedQty = lst.reduce((n, l) => n + (Number(l.tickets) || 0), 0);
       let fill = 'unread';
       if (!s) fill = 'off';                                          // drawn, but not sold for this event
       else if (sum && sum.unmapped) fill = 'standing';               // the site publishes no seats for it
@@ -71,7 +76,7 @@
       out[sec.code] = {
         sector: s, free, fill, sold, dots, tables, perTable, wanted: s ? s.wanted : 0,
         reqTone: mine.length ? tone : null, reqCount: mine.length,
-        listings: lst.length, dim: !fits
+        tickets: wantedQty || listedQty, ticketsOf: wantedQty ? 'requested' : 'listed', dim: !fits
       };
     }
     return out;
@@ -296,13 +301,14 @@
             r={s.label.size * 0.22} fill={color} class="pdot" />
         {/each}
       {/if}
-      {#if i.listings}
+      {#if i.tickets}
         {@const big = s.shape === 'poly' && s.label.size >= 20}
         {@const bx = s.shape === 'rect' || s.shape === 'grid' ? s.x + s.w - 10 : s.label.x + (big ? s.label.size * 1.4 : 14)}
         {@const by = s.shape === 'rect' ? s.y + 10 : s.shape === 'grid' ? s.y - 10 : s.label.y - (big ? s.label.size : 14)}
         {@const bny = by - 3}
-        <circle cx={bx} cy={by} r="12" class="badge" />
-        <text x={bx} y={bny} dy="5" font-size="14" class="badge-n">{i.listings}</text>
+        {@const r = String(i.tickets).length > 2 ? 15 : 12}
+        <circle cx={bx} cy={by} r={r} class="badge"><title>{i.tickets} tickets {i.ticketsOf}</title></circle>
+        <text x={bx} y={bny} dy="5" font-size={r === 12 ? 14 : 12} class="badge-n">{i.tickets}</text>
       {/if}
     </g>
   {/each}

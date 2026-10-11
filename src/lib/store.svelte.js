@@ -30,6 +30,7 @@ class Store {
   toasts = $state([]);
   now = $state(Date.now());                // ticks every 5 s, so "synced 40 s ago" and staleness stay true
   update = $state({ ready: false, checking: false, checkedAt: 0 });
+  badgeTest = $state(null);                // a number typed in Settings to try the icon badge; null = automatic
   applyUpdate = null;                      // set by main.js: installs the waiting version and reloads
   swRegistration = null;
 
