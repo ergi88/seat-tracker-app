@@ -7,6 +7,7 @@
   import { saveSettings, setDisplayName, testPhone } from '../lib/actions.js';
   import { ago } from '../lib/fmt.js';
   import { canBadge, installed, permission, askPermission, setBadge } from '../lib/badge.js';
+  import { showNotification } from '../lib/notify.js';
 
   const v = $derived(store.view);
   const s = $derived(v ? v.settings : null);
@@ -66,19 +67,33 @@
   }
   /* a delay lets you leave the app before the badge changes: 0 = instant */
   let badgeDelay = $state(0);
-  let pending = $state(null);              // { n, at } while a delayed set waits
+  let pending = $state(null);              // { label, at } while a delayed test waits
   let pendingTimer = 0;
   const pendingLeft = $derived(pending ? Math.max(0, Math.ceil((pending.at - store.now) / 1000)) : 0);
   function cancelPending() { clearTimeout(pendingTimer); pending = null; }
   $effect(() => () => clearTimeout(pendingTimer));
+  /* runs fn now, or after the picked delay with a countdown */
+  function later(label, fn) {
+    cancelPending();
+    if (!badgeDelay) { fn(); return; }
+    pending = { label, at: Date.now() + badgeDelay * 1000 };
+    pendingTimer = setTimeout(() => { pending = null; fn(); }, badgeDelay * 1000);
+    store.toast(`${label} in ${badgeDelay} s. Leave the app now.`);
+  }
   function scheduleBadge(n) {
     n = Math.max(0, Math.min(999, Math.round(Number(n) || 0)));
     badgeNum = n;
-    cancelPending();
-    if (!badgeDelay) { tryBadge(n); return; }
-    pending = { n, at: Date.now() + badgeDelay * 1000 };
-    pendingTimer = setTimeout(() => { pending = null; tryBadge(n); }, badgeDelay * 1000);
-    store.toast(`${n ? `Badge ${n}` : 'Clearing the badge'} in ${badgeDelay} s. Go to the home screen now.`);
+    later(n ? `Badge ${n}` : 'Clearing the badge', () => tryBadge(n));
+  }
+  let sent = 0;
+  function scheduleNotification() {
+    const n = ++sent;
+    later('Test notification', async () => {
+      try {
+        await showNotification('Seat Tracker test', `Test notification ${n}, ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}. Tap to open the Inbox.`, '#/inbox');
+        if (!document.hidden) store.toast('Notification sent');
+      } catch (e) { store.toast(e.message || 'The notification could not be shown', { tone: 'bad' }); }
+    });
   }
   async function tryBadge(n) {
     n = Math.max(0, Math.min(999, Math.round(Number(n) || 0)));
@@ -130,7 +145,7 @@
     </div>
     <p class="muted small hint">New team data arrives by itself every 15 seconds while the app is open, and the moment you open it again. Pull down on any list to sync from scratch.</p>
 
-    <h2 class="section-title">App icon badge</h2>
+    <h2 class="section-title">App icon badge and notifications</h2>
     <div class="group">
       <div class="row static">
         <span class="grow"><span class="title">{PERM_TEXT[perm]}</span>
@@ -154,20 +169,23 @@
           <button class="btn small primary" onclick={() => scheduleBadge(badgeNum)} disabled={!canBadge()}>Set badge</button>
           <button class="btn small" onclick={() => scheduleBadge(0)} disabled={!canBadge()}>Clear</button>
         </div>
-        <div class="seg four-way" role="group" aria-label="When to set it">
+        <div class="badge-test">
+          <button class="btn small" onclick={scheduleNotification} disabled={perm !== 'granted'}>Send test notification</button>
+        </div>
+        <div class="seg four-way" role="group" aria-label="When to run the test">
           {#each [[0, 'Instant'], [5, '5 s'], [10, '10 s'], [30, '30 s']] as [d, label]}
             <button class:on={badgeDelay === d} onclick={() => { badgeDelay = d; }}>{label}</button>
           {/each}
         </div>
         {#if pending}
           <div class="pending">
-            <span class="grow">{pending.n ? `Badge ${pending.n}` : 'Clearing'} in {pendingLeft} s…</span>
+            <span class="grow">{pending.label} in {pendingLeft} s…</span>
             <button class="btn small" onclick={cancelPending}>Cancel</button>
           </div>
         {/if}
       </div>
     </div>
-    <p class="muted small hint">{badgeHint} A test number stays until you press Automatic or reopen the app. With a delay, press Set badge and leave the app: if the badge never appears, the iPhone paused the app before the timer ran.</p>
+    <p class="muted small hint">{badgeHint} A test number stays until you press Automatic or reopen the app. With a delay, press Set badge or Send test notification and leave the app: if nothing appears, the iPhone paused the app before the timer ran. Tapping a test notification opens the Inbox.</p>
 
     <h2 class="section-title">Appearance</h2>
     <div class="seg">

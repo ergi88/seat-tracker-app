@@ -15,7 +15,7 @@
     if (top > Number(store.deviceSettings.inboxSeen || 0)) store.saveDeviceSettings({ inboxSeen: top });
   });
 
-  const EMOJI = { available: '🎉', low: '⚠️', backOk: '✅', gone: '❌', failing: '🚨', recovered: '✅', newEvent: '📅', sectorsOpen: '🔓', teamNote: '💬', summary: '📋' };
+  const EMOJI = { available: '🎉', low: '⚠️', backOk: '✅', gone: '❌', failing: '🚨', recovered: '✅', newEvent: '📅', sectorsOpen: '🔓', teamNote: '💬', summary: '📋', appTest: '🧪' };
 </script>
 
 <Page title="Inbox" subtitle="Alerts sent to you this week">

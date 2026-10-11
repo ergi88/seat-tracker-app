@@ -5,6 +5,7 @@
  * The mirror is replaced whole on every change ($state.raw), never edited
  * in place, so the screens recompute once per change.
  * ------------------------------------------------------------------ */
+import { showNotification } from './notify.js';
 import { untrack } from 'svelte';
 import { get, set, del } from 'idb-keyval';
 import { supa, must } from './supa.js';
@@ -152,6 +153,10 @@ class Store {
         this.sync.error = null;
         this.sync.at = Date.now();
         for (const a of res.newAlerts.slice(0, 3).reverse()) this.toast(`${a.title}: ${a.message.split('\n')[0]}`, { tone: 'alert', ms: 6000 });
+        /* TEMPORARY: the extension's "Test phone app notification" (type appTest) becomes a real one */
+        for (const a of res.newAlerts.filter(x => x.type === 'appTest').slice(0, 3)) {
+          showNotification(a.title, a.message, '#/inbox').catch(() => {});
+        }
       } catch (e) {
         this.sync.error = e.message;
         if (e.notMember) this.sync.notMember = true;

@@ -44,7 +44,9 @@ export default defineConfig({
          * worker (it lives in IndexedDB, per signed-in person) */
         globPatterns: ['**/*.{js,css,html,png,svg,webmanifest}'],
         navigateFallback: 'index.html',
-        runtimeCaching: []
+        runtimeCaching: [],
+        /* opens the app when a notification it showed is tapped */
+        importScripts: ['notify-sw.js']
       }
     })
   ]
