@@ -105,6 +105,44 @@ export function eventTime(text, now = Date.now()) {
   return t < now - 60 * 86400000 ? at(new Date(now).getFullYear() + 1) : t;
 }
 
+/* What a listing you just edited by hand asks of the requests linked to it
+ * (your own, with its listing ID), as the extension does when a PC reads the
+ * change on viagogo (bg/events.js saveListings: the quantity follows the
+ * tickets). The extension will not do it after your edit, because the next
+ * read finds viagogo already agreeing, so the app offers it here.
+ * -> [{ id, num, changes: { qty?, done? }, items: [{ key, text, on }] }] */
+export function listingSyncPlan(m, me, before, after) {
+  const kind = st => SK.viagogo.listingStatus(st);
+  const was = kind(before.status), now = kind(after.status);
+  const out = [];
+  for (const r of Object.values(m.requests || {})) {
+    if (r.userId !== me || !r.listing || String(r.listing) !== String(after.id)) continue;
+    const items = [];
+    const t = Number(after.tickets);
+    if (!r.done && t >= 1 && t !== Number(before.tickets) && t !== Number(r.qty)) {
+      items.push({ key: 'qty', value: t, text: `Tickets ${r.qty} → ${t}`, on: true });
+    }
+    if (!r.done && now !== was && (now === 'sold' || now === 'deactivated')) {
+      /* sold: nothing left to find. Deactivated may be a pause, so it is offered, not ticked */
+      items.push({ key: 'done', value: true, text: now === 'sold' ? 'Mark done: the tickets are sold' : 'Mark done: the listing is off', on: now === 'sold' });
+    }
+    if (r.done && now !== was && (now === 'active' || now === 'pending') && (was === 'sold' || was === 'deactivated')) {
+      items.push({ key: 'done', value: false, text: 'Reopen: the listing is on sale again', on: true });
+    }
+    if (items.length) out.push({ id: r.id, num: r.num, items });
+  }
+  return out.sort((a, b) => a.num - b.num);
+}
+
+/* The day and time split from the title (core/util.js splitEventTitle) as a
+ * time, or null when the title had no date. */
+export function infoTime(info) {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec((info && info.date) || '');
+  if (!d) return null;
+  const t = /^(\d{2}):(\d{2})$/.exec(info.time || '');
+  return new Date(+d[1], +d[2] - 1, +d[3], t ? +t[1] : 0, t ? +t[2] : 0).getTime();
+}
+
 /* Nearest first: what is coming (today included), soonest first; then
  * what is over, most recent first; then whatever has no date. */
 export function byNearest(now = Date.now()) {
@@ -154,7 +192,7 @@ function moneyOf(m, listing, buy) {
     rateDay: at.day, manualRates: at.manual,
     listing: {
       id: listing.id, price: listing.price, payout: listing.payout, tickets: listing.tickets, currency: listing.currency,
-      recommended: listing.recommended, status: listing.status, performance: listing.performance, seenAt: listing.seenAt
+      status: listing.status, performance: listing.performance, seenAt: listing.seenAt
     }
   });
 }
@@ -171,6 +209,7 @@ export function buildView(m, me, opts = {}) {
   const now = opts.now || Date.now();
   const scans = opts.scans || {};
   const hidden = opts.hidden || {};                   // request ids waiting for their delete (undo window)
+  const hiddenListings = opts.hiddenListings || {};   // listing ids waiting for theirs
   const settings = settingsFor(m, me, opts.deviceSettings);
   const archived = new Set(settings.archivedEvents);
   const ownerName = uid => (m.profiles[uid] || {}).displayName || 'someone';
@@ -181,20 +220,29 @@ export function buildView(m, me, opts = {}) {
    * the extension's viagogo matching reads them; else the date viagogo gives
    * on a listing or sale of yours linked to the event. */
   const timeOf = {};
+  const vgWhen = {};                  // the same listing's time and venue, for the event's info
   for (const x of [...Object.values(m.listings), ...Object.values(m.sales || {})]) {
     if (!x.eventKey || x.userId !== me || timeOf[x.eventKey]) continue;
     const t = eventTime(x.when, now);
-    if (t !== null) timeOf[x.eventKey] = t;
+    if (t === null) continue;
+    timeOf[x.eventKey] = t;
+    vgWhen[x.eventKey] = { time: SK.util.splitEventTitle(x.when).time, venue: String(x.venue || '').trim() };
   }
+  /* a title with no date (eFinity's "Senidah Cair") takes the listing's time and venue too */
+  const infoOf = ev => {
+    const info = SK.util.eventInfo(ev);
+    const w = !info.date && vgWhen[ev.key];
+    return w ? Object.assign({}, info, { time: info.time || w.time, venue: info.venue || w.venue }) : info;
+  };
   for (const ev of Object.values(m.events)) {
-    const t = eventTime(`${ev.date || ''} ${ev.title || ''}`, now);
+    const t = infoTime(SK.util.eventInfo(ev)) ?? eventTime(`${ev.date || ''} ${ev.title || ''}`, now);
     if (t !== null) timeOf[ev.key] = t;
   }
   const evTime = key => (timeOf[key] === undefined ? null : timeOf[key]);
 
   const teamPricesAt = (eventKey, sectorId) => Object.values(m.teamPrices)
     .filter(t => t.userId !== me && t.eventKey === eventKey && String(t.sectorId) === String(sectorId) && ACTIVE_LISTING.test(t.status || 'active'))
-    .map(t => ({ owner: ownerName(t.userId), price: t.price, currency: t.currency, tickets: t.tickets, seenAt: t.seenAt }));
+    .map(t => ({ userId: t.userId, owner: ownerName(t.userId), price: t.price, currency: t.currency, tickets: t.tickets, seenAt: t.seenAt }));
 
   const requests = allRequests.filter(r => r.userId === me).map(r => {
     const ev = m.events[r.eventKey];
@@ -215,7 +263,7 @@ export function buildView(m, me, opts = {}) {
       pendingGone: !!(m.state[r.id] || {}).pendingGone,
       muffled: muffled(m, r),
       eventNum: ev ? ev.num : 0,
-      eventTitle: ev ? ev.title || ev.key : r.eventKey,
+      eventTitle: ev ? SK.util.eventInfo(ev).name || ev.key : r.eventKey,
       time: ev ? evTime(ev.key) : null,
       listingUrl: r.listing ? SK.util.viagogoUrl(r.listing) : '',
       sectorUrl: sectorUrlOf(ev, sector)
@@ -240,6 +288,7 @@ export function buildView(m, me, opts = {}) {
     return {
       key: ev.key, num: ev.num || 0, site: ev.site, siteLabel: site ? site.label : ev.site,
       siteId: ev.siteId, title: ev.title || ev.key, date: ev.date || '', time: evTime(ev.key), url: eventUrlOf(ev),
+      info: infoOf(ev),
       archived: archived.has(ev.key), currency: currencyOf(ev), cats: ev.cats || {},
       canPrices: !!(site && site.can.prices),
       autoEvery: autoMinutesOf(ev, m.team),
@@ -265,7 +314,7 @@ export function buildView(m, me, opts = {}) {
   }).sort((a, b) => byNearest(now)(a, b) || a.num - b.num);
   for (const ev of events) ev.tone = tone(ev.worst);
 
-  const listings = Object.values(m.listings).filter(l => l.userId === me).map(l => {
+  const listings = Object.values(m.listings).filter(l => l.userId === me && !hiddenListings[l.id]).map(l => {
     const r = allRequests.find(x => x.userId === me && x.listing === l.id) || null;
     const ev = m.events[r ? r.eventKey : l.eventKey] || null;
     const sectorId = r ? r.sec : l.sectorId;
@@ -278,11 +327,14 @@ export function buildView(m, me, opts = {}) {
       sectorId: sectorId || null, requestId: r ? r.id : null, num: r ? r.num : null, done: r ? r.done : false,
       code: r ? codeOf(m, r) : ((sectorOf(ev, sectorId) || {}).code || l.section),
       reqStatus: req ? req.status : null,
-      eventKey: ev ? ev.key : null, eventNum: ev ? ev.num : null, eventTitle: ev ? ev.title : '',
+      eventKey: ev ? ev.key : null, eventNum: ev ? ev.num : null, eventTitle: ev ? SK.util.eventInfo(ev).name : '',
       time: ev ? evTime(ev.key) ?? eventTime(l.when, now) : eventTime(l.when, now),
       track: l.track, seenAt: l.seenAt, venue: l.venue,
-      currency: l.currency, price: l.price, tickets: l.tickets, payout: l.payout, recommended: l.recommended,
+      currency: l.currency, price: l.price, tickets: l.tickets, payout: l.payout,
       buyPrice: l.buyPrice, buyCurrency: l.buyCurrency,
+      sectorName: (sectorOf(ev, sectorId) || {}).name || l.section,
+      sectorUrl: ev && sectorId ? sectorUrlOf(ev, sectorOf(ev, sectorId)) : '',
+      teamPrices: ev && sectorId ? teamPricesAt(ev.key, sectorId) : [],
       state: listingState(l, r, ev),
       statusKind: SK.viagogo.listingStatus(l.status),
       url: SK.util.viagogoUrl(l.id),
@@ -300,7 +352,7 @@ export function buildView(m, me, opts = {}) {
     const at = ratesAt(m, Date.parse(s.soldOn) || s.seenAt);
     return Object.assign({}, s, {
       time: ev ? evTime(ev.key) ?? eventTime(s.when, now) : eventTime(s.when, now),
-      eventNum: ev ? ev.num : null, eventTitle: ev ? ev.title : '', requestNum: r ? r.num : null,
+      eventNum: ev ? ev.num : null, eventTitle: ev ? SK.util.eventInfo(ev).name : '', requestNum: r ? r.num : null,
       buy, money: Object.assign(SK.sales.saleMoney(s, buy, at.rates), { rateDay: at.day })
     });
   }).sort((a, b) => String(b.soldOn).localeCompare(String(a.soldOn)));

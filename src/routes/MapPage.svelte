@@ -82,7 +82,7 @@
   <header class="bar">
     <button class="icon-btn" onclick={() => router.back(href.event(key))} aria-label="Back"><Icon name="back" /></button>
     <div class="ttl">
-      <b>{ev ? `[${ev.num}] ${ev.title}` : 'Stadium'}</b>
+      <b>{ev ? `[${ev.num}] ${ev.info.name}` : 'Stadium'}</b>
       <span>{venue ? venue.name : ''}{ev && ev.time !== null ? ' · ' + fromToday(ev.time) : ''}</span>
     </div>
     <span class="spacer" aria-hidden="true"></span>
@@ -135,7 +135,9 @@
         {#if hasOff}<span><i class="sw off"></i>Not on sale</span>{/if}
         {#if tableGrid}<span><i class="sw l3"></i>Table free</span>{/if}
         <span><i class="sw req"></i>Your request</span>
-        <span><i class="dotl"></i>Tickets you want</span>
+        <span><i class="dotl"></i>Requested + listed</span>
+        <span><i class="dotl req"></i>Requested only</span>
+        <span><i class="dotl list"></i>Listed only</span>
       </div>
       {#if offMap.length}
         <div class="off">
@@ -181,7 +183,7 @@
    * drawing, so no section hides under the buttons */
   .zoom { position: absolute; right: 10px; bottom: 10px; display: grid; grid-auto-flow: column; gap: 6px; }
   .zoom button {
-    width: 44px; height: 44px; border-radius: 12px; border: 0; display: grid; place-items: center; cursor: pointer;
+    width: 44px; height: 44px; padding: 0; -webkit-appearance: none; appearance: none; border-radius: 12px; border: 0; display: grid; place-items: center; cursor: pointer;
     background: color-mix(in srgb, var(--panel) 88%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--ink); box-shadow: 0 2px 10px var(--shadow); font-size: 20px;
   }
   .zoom button:active { transform: scale(.94); }
@@ -197,6 +199,8 @@
   .sw.l3 { background: var(--sec-l3); }
   .sw.req { background: transparent; box-shadow: inset 0 0 0 2px var(--s-ok); }
   .dotl { width: 10px; height: 10px; border-radius: 50%; background: var(--map-listing); display: inline-block; }
+  .dotl.req { background: var(--badge-req); }
+  .dotl.list { background: var(--badge-list); }
   .off { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
   .chip { flex: none; min-height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel); font-size: 13px; font-weight: 600; cursor: pointer; }
   .legend p { margin: 0; }

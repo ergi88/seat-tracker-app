@@ -13,11 +13,12 @@
   import Money from './routes/Money.svelte';
   import Inbox from './routes/Inbox.svelte';
   import Settings from './routes/Settings.svelte';
-  import RequestSheet from './routes/RequestSheet.svelte';
+  import DealSheet from './routes/DealSheet.svelte';
   import SectorSheet from './routes/SectorSheet.svelte';
   import MuteSheet from './routes/MuteSheet.svelte';
   import MessageSheet from './routes/MessageSheet.svelte';
-  import ListingSheet from './routes/ListingSheet.svelte';
+  import DeleteRequestSheet from './routes/DeleteRequestSheet.svelte';
+  import DeleteListingSheet from './routes/DeleteListingSheet.svelte';
 
   const route = $derived(router.route);
   const sheet = $derived(router.sheet);
@@ -31,10 +32,9 @@
     document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#0f1115' : '#f2f3f6');
   });
 
-  /* the icon badge counts what needs you, like the extension's toolbar
-   * badge, unless a test number was set in Settings */
+  /* the icon badge counts what needs you, like the extension's toolbar badge */
   $effect(() => {
-    const n = store.badgeTest ?? (store.view ? store.view.attention.length : 0);
+    const n = store.view ? store.view.attention.length : 0;
     if (!canBadge()) return;
     setBadge(n).catch(() => {});
   });
@@ -62,11 +62,13 @@
 
   {#if sheet}
     {#key sheet}
-      {#if sheet.kind === 'request'}<RequestSheet id={sheet?.id} />
+      {#if sheet.kind === 'request'}<DealSheet requestId={sheet?.id} tab={sheet?.tab} />
       {:else if sheet.kind === 'sector'}<SectorSheet eventKey={sheet?.eventKey} sectorId={sheet?.sectorId} table={sheet?.table} />
       {:else if sheet.kind === 'mute'}<MuteSheet />
-      {:else if sheet.kind === 'message'}<MessageSheet eventKey={sheet?.eventKey} section={sheet?.section} />
-      {:else if sheet.kind === 'listing'}<ListingSheet id={sheet?.id} />
+      {:else if sheet.kind === 'message'}<MessageSheet eventKey={sheet?.eventKey} section={sheet?.section} to={sheet?.to} />
+      {:else if sheet.kind === 'listing'}<DealSheet listingId={sheet?.id} tab={sheet?.tab} />
+      {:else if sheet.kind === 'deleteRequest'}<DeleteRequestSheet id={sheet?.id} />
+      {:else if sheet.kind === 'deleteListing'}<DeleteListingSheet id={sheet?.id} />
       {/if}
     {/key}
   {/if}

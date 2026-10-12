@@ -12,7 +12,7 @@
 
 <style>
   .stepper { display: inline-flex; align-items: center; background: var(--soft); border-radius: 12px; }
-  button { width: var(--tap); height: var(--tap); border: 0; background: none; color: var(--accent); display: grid; place-items: center; border-radius: 12px; cursor: pointer; }
+  button { width: var(--tap); height: var(--tap); padding: 0; -webkit-appearance: none; appearance: none; border: 0; background: none; color: var(--accent); display: grid; place-items: center; border-radius: 12px; cursor: pointer; }
   button:active { background: var(--softer); }
   button:disabled { color: var(--muted); opacity: .4; }
   .val { min-width: 36px; text-align: center; font-weight: 700; font-size: 18px; }

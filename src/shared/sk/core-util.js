@@ -156,7 +156,128 @@
     return id ? `https://my.viagogo.com/listings/?search=${encodeURIComponent(id)}&activeTab=ACTIVE%7CPENDING%7CDEACTIVATED%7CEXPIRED` : '';
   }
 
+  /* ---------------- event titles ------------------------------------ */
+
+  const MONTH_WORDS = {
+    january: 1, jan: 1, february: 2, feb: 2, march: 3, mar: 3, april: 4, apr: 4, may: 5,
+    june: 6, jun: 6, july: 7, jul: 7, august: 8, aug: 8, september: 9, sept: 9, sep: 9,
+    october: 10, oct: 10, november: 11, nov: 11, december: 12, dec: 12,
+    janar: 1, shkurt: 2, mars: 3, prill: 4, maj: 5, qershor: 6, korrik: 7, gusht: 8,
+    shtator: 9, tetor: 10, nentor: 11, dhjetor: 12
+  };
+  const MONTH_RE = Object.keys(MONTH_WORDS).sort((a, b) => b.length - a.length).join('|');
+  const DATE_RES = [
+    { re: /(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)/, y: 1, m: 2, d: 3 },                       // 2026-11-27
+    { re: /(?<!\d)(\d{1,2})[./](\d{1,2})[./](\d{4}|\d{2})(?!\d)/, d: 1, m: 2, y: 3 },           // 27.11.2026
+    { re: new RegExp(`\\b(${MONTH_RE})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?!\\d)(?:,?\\s+(\\d{4}))?`, 'i'), m: 1, d: 2, y: 3 }, // November 12, 2026
+    { re: new RegExp(`(?<!\\d)(\\d{1,2})(?:st|nd|rd|th)?\\.?\\s+(${MONTH_RE})\\b\\.?(?:,?\\s+(\\d{4}))?`, 'i'), d: 1, m: 2, y: 3 } // 12 Nov 2026
+  ];
+  const TIME_RES = [
+    /(?<![\d.])(\d{1,2})[:h](\d{2})(?!\d)(?:\s*([ap])\.?m\.?)?/i,                               // 20:45, 8:45 PM, 20h45
+    /(?<![\d.])(\d{1,2})\s*([ap])\.?m\b\.?/i                                                     // 9 PM
+  ];
+  const WEEKDAY_RE = /(?<!\p{L})(?:(?:mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)(?:day|sday|nesday|rsday|urday)?|(?:e\s+)?(?:h[eë]n[eë]|mart[eë]|m[eë]rkur[eë]|enjte|premte|shtun[eë]|diel))(?!\p{L})\.?/giu;
+  const FILLER_RE = /(^|\s)(at|ora|@)(?=\s|$)/gi;
+  /* ë and ç folded one character for one, so match positions stay put */
+  const foldSame = s => s.replace(/[ëË]/g, 'e').replace(/[çÇ]/g, 'c');
+  const pad2 = n => String(n).padStart(2, '0');
+  const trimJunk = s => s.replace(/\s+/g, ' ').replace(/^[\s,;:·•|/-]+|[\s,;:·•|/-]+$/g, '').trim();
+  /* "AIR ALBANIA STADIUM" -> "Air Albania Stadium"; mixed case is left alone */
+  const tidyCaps = s => (/[A-Z]{4}/.test(s) && s === s.toUpperCase()
+    ? s.toLowerCase().replace(/(^|[\s(/-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase())
+    : s);
+
+  function cut(text, start, len) {
+    return text.slice(0, start) + ' ' + text.slice(start + len);
+  }
+
+  function readDate(text, now) {
+    const t = foldSame(text);
+    for (const p of DATE_RES) {
+      const m = p.re.exec(t);
+      if (!m) continue;
+      const month = /\d/.test(m[p.m]) ? +m[p.m] : MONTH_WORDS[m[p.m].toLowerCase()];
+      const day = +m[p.d];
+      if (!(month >= 1 && month <= 12 && day >= 1 && day <= 31)) continue;
+      let year = m[p.y] ? +m[p.y] : 0;
+      if (year && year < 100) year += 2000;
+      if (!year) {
+        /* no year: the coming one (more than 60 days past is next year's) */
+        const n = new Date(now);
+        year = n.getFullYear();
+        if (new Date(year, month - 1, day).getTime() < now - 60 * 86400000) year++;
+      }
+      return { iso: `${year}-${pad2(month)}-${pad2(day)}`, rest: cut(text, m.index, m[0].length) };
+    }
+    return null;
+  }
+
+  function readTime(text) {
+    for (const re of TIME_RES) {
+      const m = re.exec(text);
+      if (!m) continue;
+      let h = +m[1];
+      const mi = m.length > 3 ? +m[2] : 0;
+      const ap = String((m.length > 3 ? m[3] : m[2]) || '').toLowerCase();
+      if (ap === 'p' && h < 12) h += 12;
+      if (ap === 'a' && h === 12) h = 0;
+      if (h > 23 || mi > 59) continue;
+      return { hm: `${pad2(h)}:${pad2(mi)}`, rest: cut(text, m.index, m[0].length) };
+    }
+    return null;
+  }
+
+  /* A site's event title, split into what the lists show. Sites put the day,
+   * time and place in the title, each its own way:
+   *   eBileta   "Shqiperi - Finlande - November 12, 2026, 8:45 PM - Air Albania Stadium"
+   *   Posttick  "Max Amini - 27.11.2026 - 9:30 PM - Pallati i Kongreseve, Tirana"
+   *   eFinity   "SENIDAH - SC Cair, 22.10.2026"
+   * The parts are cut on " - "; whatever comes before the first part with a
+   * date or time is the name, whatever is left after it is the venue.
+   * opts: { date, venue, now } - a date or venue the site gave on its own,
+   * used when the title has none.
+   * -> { name, date: 'YYYY-MM-DD' | '', time: 'HH:MM' | '', venue } */
+  function splitEventTitle(title, opts) {
+    opts = opts || {};
+    const now = opts.now || Date.now();
+    const full = String(title || '').replace(/\s+/g, ' ').trim();
+    let date = '', time = '';
+    const bits = full.split(/(\s+[-–—|]\s+)/);       // part, separator, part...
+    const parts = bits.filter((x, i) => i % 2 === 0).map(text => {
+      let rest = text, found = false;
+      const d = date ? null : readDate(rest, now);
+      if (d) { date = d.iso; rest = d.rest; found = true; }
+      const t = time ? null : readTime(rest);
+      if (t) { time = t.hm; rest = t.rest; found = true; }
+      return { text, found, rest: found ? trimJunk(rest.replace(WEEKDAY_RE, ' ').replace(FILLER_RE, ' ')) : text };
+    });
+
+    const first = parts.findIndex(p => p.found);
+    let name = full, venue = '';
+    if (first >= 0) {
+      name = bits.slice(0, 2 * first - 1).join('');      // as the site wrote it, dashes and all
+      const after = parts.slice(first).map(p => p.rest).filter(Boolean);
+      if (!name) name = after.shift() || full;
+      venue = after.join(', ');
+    }
+    if (opts.date && (!date || !time)) {
+      const side = splitEventTitle(opts.date, { now });
+      date = date || side.date;
+      time = time || side.time;
+    }
+    return { name, date, time, venue: tidyCaps(venue || String(opts.venue || '').trim()) };
+  }
+
+  /* What the lists show for an event: the split saved on it when it was
+   * created or last loaded, else split now (an event older than the split). */
+  function eventInfo(ev) {
+    const saved = ev && ev.extra && ev.extra.info;
+    if (saved && saved.name) return saved;
+    return splitEventTitle(ev && ev.title, { date: ev && ev.date });
+  }
+
   SK.util = {
+    splitEventTitle, eventInfo,
     listingId, viagogoUrl,
     clampInt, boolValue, normKey, newId, plural,
     ago, since, fmtTime, fmtClock, parseHM, inDailyWindow, dayStamp,

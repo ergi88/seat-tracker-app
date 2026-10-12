@@ -39,7 +39,7 @@
     for (const l of listings) {
       const p = l.money;
       tickets += Number(l.tickets) || 0;
-      if (p && !p.missing) { profit += p.total; counted++; if (p.atRecommended && p.atRecommended.total < 0) losing++; }
+      if (p && !p.missing) { profit += p.total; counted++; if (p.perTicket < 0) losing++; }
     }
     return { profit, counted, losing, tickets };
   });
@@ -91,7 +91,7 @@
     <div class="hero">
       <div><span class="l">Profit if all sell</span><b class="num {listingTotals.profit >= 0 ? 'ok' : 'bad'}">{lek(listingTotals.profit, true)}</b></div>
       <div><span class="l">Tickets listed</span><b class="num">{listingTotals.tickets}</b></div>
-      <div><span class="l">Lose at viagogo's price</span><b class="num {listingTotals.losing ? 'bad' : ''}">{listingTotals.losing}</b></div>
+      <div><span class="l">Below break-even</span><b class="num {listingTotals.losing ? 'bad' : ''}">{listingTotals.losing}</b></div>
     </div>
     <label class="toggle small muted"><input type="checkbox" bind:checked={all} /> Show deactivated and sold</label>
 

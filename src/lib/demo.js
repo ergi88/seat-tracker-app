@@ -116,7 +116,7 @@ export function demoMirror(now = Date.now()) {
   m.members = [{ userId: ME, email: 'me@example.com' }, { userId: MATE, email: 'mate@example.com' }];
   m.events = {
     'ebileta:2160': {
-      key: 'ebileta:2160', num: 1, site: 'ebileta', siteId: '2160', title: 'Albania – Serbia', date: '2026-11-14 20:45',
+      key: 'ebileta:2160', num: 1, site: 'ebileta', siteId: '2160', title: 'Albania – Serbia - November 14, 2026, 8:45 PM - AIR ALBANIA STADIUM', date: '',
       sectors: airAlbaniaSectors(),
       extra: { idSM: '900' }, cats: {}, autoMin: null
     },
@@ -185,12 +185,12 @@ export function demoMirror(now = Date.now()) {
   m.listings = {
     20000000001: {
       id: '20000000001', userId: ME, eventKey: 'ebileta:2160', sectorId: '12', vgEventId: '1', title: 'Albania vs Serbia', when: 'Sat 14 Nov',
-      section: 'E106', row: '', status: 'Active', currency: 'USD', price: 84, payout: 453.6, tickets: 6, recommended: 52,
+      section: 'E106', row: '', status: 'Active', currency: 'USD', price: 84, payout: 453.6, tickets: 6,
       performance: '', history: [], seenAt: now - 20 * min, seenBy: 'pc1', venue: 'Air Albania', track: 'auto', lastSweepAt: 0, buyPrice: null, buyCurrency: 'ALL'
     },
     20000000002: {
       id: '20000000002', userId: ME, eventKey: 'ebileta:2160', sectorId: '13', vgEventId: '1', title: 'Albania vs Serbia', when: 'Sat 14 Nov',
-      section: 'W105', row: '', status: 'Active', currency: 'USD', price: 61, payout: 158.6, tickets: 2, recommended: 58,
+      section: 'W105', row: '', status: 'Active', currency: 'USD', price: 61, payout: 158.6, tickets: 2,
       performance: '', history: [], seenAt: now - 20 * min, seenBy: 'pc1', venue: 'Air Albania', track: 'auto', lastSweepAt: 0, buyPrice: 4000, buyCurrency: 'ALL'
     }
   };

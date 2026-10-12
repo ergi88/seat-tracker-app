@@ -25,7 +25,7 @@ test('profit of a request matches the README example (+13,812 L, x1.6)', () => {
   assert.equal(r1.buy.amount, 4000);                 // eBileta section price, the higher one
   assert.equal(Math.round(r1.profit.total), 13812);
   assert.equal(r1.profit.winRate.toFixed(1), '1.6');
-  assert.equal(Math.round(r1.profit.atRecommended.total), -593);
+  assert.equal(r1.profit.atRecommended, undefined, 'viagogo\'s recommended price is not used');
 });
 
 test('teammates in the same sector show their price, never their payout', () => {
@@ -145,4 +145,30 @@ test('Senidah: the bar tables are one sector, the standing areas have no seat da
   assert.equal(bar.code, 'Bar Table');
   assert.equal(bar.summary.available % 6, 0);                       // whole tables only
   assert.ok(e.sectors.find(s => s.code === 'PARTER').summary.unmapped);
+});
+
+/* editing a listing by hand: what the linked request is offered */
+import { listingSyncPlan } from '../src/lib/model.js';
+
+test('a listing edited by hand offers its request the new tickets, and done when sold', () => {
+  const m = { requests: {
+    a: { id: 'a', num: 7, userId: ME, listing: '111', qty: 6, done: false },
+    b: { id: 'b', num: 8, userId: 'someone-else', listing: '111', qty: 6, done: false },
+    c: { id: 'c', num: 9, userId: ME, listing: '222', qty: 2, done: false }
+  } };
+  const before = { id: '111', tickets: 6, status: 'Active' };
+  assert.deepEqual(listingSyncPlan(m, ME, before, { id: '111', tickets: 4, status: 'Active' }).map(p => [p.num, p.items.map(i => [i.key, i.value, i.on])]),
+    [[7, [['qty', 4, true]]]]);
+  assert.deepEqual(listingSyncPlan(m, ME, before, { id: '111', tickets: 6, status: 'Sold' })[0].items.map(i => [i.key, i.value, i.on]),
+    [['done', true, true]]);
+  /* deactivated may be a pause: offered, not ticked */
+  assert.deepEqual(listingSyncPlan(m, ME, before, { id: '111', tickets: 6, status: 'Deactivated' })[0].items.map(i => [i.key, i.on]),
+    [['done', false]]);
+  assert.deepEqual(listingSyncPlan(m, ME, before, { id: '111', tickets: 6, status: 'Active' }), []);
+});
+
+test('a listing back on sale offers to reopen its done request', () => {
+  const m = { requests: { a: { id: 'a', num: 7, userId: ME, listing: '111', qty: 6, done: true } } };
+  const plan = listingSyncPlan(m, ME, { id: '111', tickets: 6, status: 'Sold' }, { id: '111', tickets: 6, status: 'Active' });
+  assert.deepEqual(plan[0].items.map(i => [i.key, i.value]), [['done', false]]);
 });

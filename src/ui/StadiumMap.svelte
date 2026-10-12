@@ -2,8 +2,9 @@
   /* A stadium, every section coloured by what the team's last scans found:
    * blue by how many seats are free, grey with none, hatched when the site
    * says sold out, pale when nobody has read it. Your requests outline their
-   * section in their status colour and put a pink count of the tickets they
-   * ask for on it; a section with only listings counts their tickets.
+   * section in their status colour. A badge counts your tickets there, its
+   * colour saying how they stand: pink = requested and listed on viagogo,
+   * dark = requested, not listed yet, amber = listed with no request.
    *
    * Interactive: drag to pan, pinch / wheel / double-tap / + − to zoom, tap
    * a section to open it. As a preview (interactive=false) it is a picture
@@ -57,6 +58,12 @@
        * is the usual, so a count of them would read 1 everywhere */
       const wantedQty = mine.reduce((n, r) => n + (Number(r.qty) || 0), 0);
       const listedQty = lst.reduce((n, l) => n + (Number(l.tickets) || 0), 0);
+      /* both when a request here has its listing; a listing whose request is
+       * done or gone counts as a listing alone */
+      const linked = mine.some(r => r.listing);
+      const openIds = new Set(mine.map(r => r.id));
+      const loose = lst.filter(l => !l.requestId || !openIds.has(l.requestId));
+      const badge = linked ? 'both' : mine.length ? 'req' : loose.length ? 'list' : null;
       let fill = 'unread';
       if (!s) fill = 'off';                                          // drawn, but not sold for this event
       else if (sum && sum.unmapped) fill = 'standing';               // the site publishes no seats for it
@@ -76,7 +83,8 @@
       out[sec.code] = {
         sector: s, free, fill, sold, dots, tables, perTable, wanted: s ? s.wanted : 0,
         reqTone: mine.length ? tone : null, reqCount: mine.length,
-        tickets: wantedQty || listedQty, ticketsOf: wantedQty ? 'requested' : 'listed', dim: !fits
+        tickets: wantedQty || listedQty, badge, dim: !fits,
+        ticketsOf: badge === 'both' ? 'requested and listed' : badge === 'req' ? 'requested, not listed yet' : 'listed, no request'
       };
     }
     return out;
@@ -307,8 +315,8 @@
         {@const by = s.shape === 'rect' ? s.y + 10 : s.shape === 'grid' ? s.y - 10 : s.label.y - (big ? s.label.size : 14)}
         {@const bny = by - 3}
         {@const r = String(i.tickets).length > 2 ? 15 : 12}
-        <circle cx={bx} cy={by} r={r} class="badge"><title>{i.tickets} tickets {i.ticketsOf}</title></circle>
-        <text x={bx} y={bny} dy="5" font-size={r === 12 ? 14 : 12} class="badge-n">{i.tickets}</text>
+        <circle cx={bx} cy={by} r={r} class="badge {i.badge}"><title>{i.tickets} tickets {i.ticketsOf}</title></circle>
+        <text x={bx} y={bny} dy="5" font-size={r === 12 ? 14 : 12} class="badge-n {i.badge}">{i.tickets}</text>
       {/if}
     </g>
   {/each}
@@ -360,5 +368,9 @@
   .stage text { fill: var(--map-stage-ink); font-weight: 700; letter-spacing: .04em; }
   .pdot { stroke: var(--map-bg); stroke-width: 1.5; pointer-events: none; }
   .badge { fill: var(--map-listing); stroke: var(--map-bg); stroke-width: 2.5; }
+  .badge.req { fill: var(--badge-req); }
+  .badge.list { fill: var(--badge-list); }
   .badge-n { fill: #fff; font-weight: 800; }
+  .badge-n.req { fill: var(--badge-req-ink); }
+  .badge-n.list { fill: var(--badge-list-ink); }
 </style>

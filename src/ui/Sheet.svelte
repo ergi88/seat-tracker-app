@@ -6,7 +6,8 @@
   import { router } from '../lib/router.svelte.js';
 
   /* head: a strip under the title that never scrolls away (links, quick actions) */
-  let { title = '', head, children, footer } = $props();
+  /* label: the dialog's name when the sheet draws its own heading instead of a title */
+  let { title = '', label = '', head, children, footer } = $props();
 
   let panel = $state();
   let dy = $state(0);
@@ -51,7 +52,7 @@
 </script>
 
 <div class="scrim" class:shown onclick={scrimTap} role="presentation"></div>
-<div class="sheet" class:shown class:dragging bind:this={panel} tabindex="-1" role="dialog" aria-modal="true" aria-label={title}
+<div class="sheet" class:shown class:dragging bind:this={panel} tabindex="-1" role="dialog" aria-modal="true" aria-label={label || title}
   style:transform={shown ? `translateY(${dy}px)` : 'translateY(100%)'}>
   <!-- dragging is a shortcut; Esc, the scrim and Back close the sheet too -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->

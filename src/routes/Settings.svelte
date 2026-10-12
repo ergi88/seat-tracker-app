@@ -6,8 +6,7 @@
   import { router } from '../lib/router.svelte.js';
   import { saveSettings, setDisplayName, testPhone } from '../lib/actions.js';
   import { ago } from '../lib/fmt.js';
-  import { canBadge, installed, permission, askPermission, setBadge } from '../lib/badge.js';
-  import { showNotification } from '../lib/notify.js';
+  import { canBadge, installed, permission, askPermission } from '../lib/badge.js';
 
   const v = $derived(store.view);
   const s = $derived(v ? v.settings : null);
@@ -45,68 +44,25 @@
     const s = Math.max(0, Math.round((store.now - store.sync.at) / 1000));
     return s < 10 ? 'just now' : s < 60 ? `${s} s ago` : ago(store.sync.at);
   });
-  /* the icon badge: what this phone allows, and a number to try it with */
+  /* notifications from the app itself, and the icon badge: what this phone allows */
   let perm = $state(permission());
-  let badgeNum = $state(store.badgeTest ?? 5);
   const autoCount = $derived(v ? v.attention.length : 0);
+  const appNotify = $derived(store.deviceSettings.appNotify !== false);
   const PERM_TEXT = {
     granted: 'Notifications allowed',
     denied: 'Notifications blocked',
     default: 'Notifications not asked yet',
     unsupported: 'This browser has no notifications'
   };
-  const badgeHint = $derived(
-    !canBadge() ? 'This browser cannot put a number on the app icon. On iPhone it needs iOS 16.4 or later and the app opened from the home screen.'
-      : !installed() ? 'Open the app from its home-screen icon (Share → Add to Home Screen), not from Safari: the badge only shows on an installed app.'
-        : perm === 'denied' ? 'Notifications were refused. Turn them on in the iPhone Settings → Notifications → Seat Tracker, then come back.'
-          : perm !== 'granted' ? 'iPhone shows the badge only after notifications are allowed. Press Ask for permission.'
-            : 'Set a number, then go to the home screen to see it on the icon.');
+  const notifyHint = $derived(
+    !installed() ? 'Open the app from its home-screen icon (Share → Add to Home Screen), not from Safari: notifications and the badge only work on an installed app.'
+      : perm === 'denied' ? 'Notifications were refused. Turn them on in the iPhone Settings → Notifications → Seat Tracker, then come back.'
+        : perm !== 'granted' ? 'Allow notifications to get alerts as notifications and the count on the app icon.'
+          : appNotify ? 'New alerts show as notifications while the app is open or just left. With the app closed, ntfy still brings them.'
+            : 'New alerts show as a message inside the app. ntfy still brings them with the app closed.');
   async function ask() {
     perm = await askPermission();
     store.toast(PERM_TEXT[perm], { tone: perm === 'granted' ? '' : 'bad' });
-  }
-  /* a delay lets you leave the app before the badge changes: 0 = instant */
-  let badgeDelay = $state(0);
-  let pending = $state(null);              // { label, at } while a delayed test waits
-  let pendingTimer = 0;
-  const pendingLeft = $derived(pending ? Math.max(0, Math.ceil((pending.at - store.now) / 1000)) : 0);
-  function cancelPending() { clearTimeout(pendingTimer); pending = null; }
-  $effect(() => () => clearTimeout(pendingTimer));
-  /* runs fn now, or after the picked delay with a countdown */
-  function later(label, fn) {
-    cancelPending();
-    if (!badgeDelay) { fn(); return; }
-    pending = { label, at: Date.now() + badgeDelay * 1000 };
-    pendingTimer = setTimeout(() => { pending = null; fn(); }, badgeDelay * 1000);
-    store.toast(`${label} in ${badgeDelay} s. Leave the app now.`);
-  }
-  function scheduleBadge(n) {
-    n = Math.max(0, Math.min(999, Math.round(Number(n) || 0)));
-    badgeNum = n;
-    later(n ? `Badge ${n}` : 'Clearing the badge', () => tryBadge(n));
-  }
-  let sent = 0;
-  function scheduleNotification() {
-    const n = ++sent;
-    later('Test notification', async () => {
-      try {
-        await showNotification('Seat Tracker test', `Test notification ${n}, ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}. Tap to open the Inbox.`, '#/inbox');
-        if (!document.hidden) store.toast('Notification sent');
-      } catch (e) { store.toast(e.message || 'The notification could not be shown', { tone: 'bad' }); }
-    });
-  }
-  async function tryBadge(n) {
-    n = Math.max(0, Math.min(999, Math.round(Number(n) || 0)));
-    badgeNum = n;
-    try {
-      await setBadge(n);
-      store.badgeTest = n;
-      store.toast(n ? `Badge set to ${n}. Look at the home screen.` : 'Badge cleared');
-    } catch (e) { store.toast(e.message || 'The badge could not be set', { tone: 'bad' }); }
-  }
-  function autoBadge() {
-    store.badgeTest = null;
-    store.toast(`Back to automatic: ${autoCount || 'no'} request${autoCount === 1 ? '' : 's'} needing you`);
   }
 
   const phoneLink = $derived(s && s.phoneTopic ? `${s.ntfyServer}/${encodeURIComponent(s.phoneTopic)}` : '');
@@ -145,7 +101,7 @@
     </div>
     <p class="muted small hint">New team data arrives by itself every 15 seconds while the app is open, and the moment you open it again. Pull down on any list to sync from scratch.</p>
 
-    <h2 class="section-title">App icon badge and notifications</h2>
+    <h2 class="section-title">Notifications and badge</h2>
     <div class="group">
       <div class="row static">
         <span class="grow"><span class="title">{PERM_TEXT[perm]}</span>
@@ -156,36 +112,17 @@
           <button class="btn small" onclick={ask}>Ask again</button>
         {/if}
       </div>
-      <div class="row static">
-        <span class="grow"><span class="title">Showing now</span>
-          <span class="sub">{store.badgeTest === null ? `Automatic: ${autoCount} request${autoCount === 1 ? '' : 's'} needing you` : `Test number ${store.badgeTest}`}</span></span>
-        {#if store.badgeTest !== null}<button class="btn small" onclick={autoBadge}>Automatic</button>{/if}
-      </div>
       <div class="pad">
-        <div class="badge-test">
-          <button class="btn small" onclick={() => { badgeNum = Math.max(0, (Number(badgeNum) || 0) - 1); }} aria-label="One less">−</button>
-          <input class="input num" type="number" inputmode="numeric" min="0" max="999" bind:value={badgeNum} aria-label="Badge number" />
-          <button class="btn small" onclick={() => { badgeNum = Math.min(999, (Number(badgeNum) || 0) + 1); }} aria-label="One more">+</button>
-          <button class="btn small primary" onclick={() => scheduleBadge(badgeNum)} disabled={!canBadge()}>Set badge</button>
-          <button class="btn small" onclick={() => scheduleBadge(0)} disabled={!canBadge()}>Clear</button>
-        </div>
-        <div class="badge-test">
-          <button class="btn small" onclick={scheduleNotification} disabled={perm !== 'granted'}>Send test notification</button>
-        </div>
-        <div class="seg four-way" role="group" aria-label="When to run the test">
-          {#each [[0, 'Instant'], [5, '5 s'], [10, '10 s'], [30, '30 s']] as [d, label]}
-            <button class:on={badgeDelay === d} onclick={() => { badgeDelay = d; }}>{label}</button>
-          {/each}
-        </div>
-        {#if pending}
-          <div class="pending">
-            <span class="grow">{pending.label} in {pendingLeft} s…</span>
-            <button class="btn small" onclick={cancelPending}>Cancel</button>
-          </div>
-        {/if}
+        <label class="switch"><span>Show alerts as notifications</span>
+          <input type="checkbox" checked={appNotify} disabled={perm !== 'granted'}
+            onchange={e => store.saveDeviceSettings({ appNotify: e.currentTarget.checked })} /></label>
+      </div>
+      <div class="row static">
+        <span class="grow"><span class="title">Badge on the app icon</span>
+          <span class="sub">{autoCount} request{autoCount === 1 ? '' : 's'} needing you</span></span>
       </div>
     </div>
-    <p class="muted small hint">{badgeHint} A test number stays until you press Automatic or reopen the app. With a delay, press Set badge or Send test notification and leave the app: if nothing appears, the iPhone paused the app before the timer ran. Tapping a test notification opens the Inbox.</p>
+    <p class="muted small hint">{notifyHint}</p>
 
     <h2 class="section-title">Appearance</h2>
     <div class="seg">
@@ -293,9 +230,4 @@
   .center { text-align: center; margin-top: 14px; }
   .hint { margin: 8px 4px 0; }
   .sub.bad { color: var(--bad); }
-  .badge-test { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .badge-test .num { width: 72px; text-align: center; }
-  .seg.four-way { grid-template-columns: repeat(4, 1fr); }
-  .pending { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
-  .pending .grow { flex: 1; }
 </style>

@@ -5,7 +5,7 @@
   import PcStatus from './PcStatus.svelte';
   import { store } from '../lib/store.svelte.js';
 
-  let { title, subtitle = '', back = null, actions, children, refresh = true } = $props();
+  let { title, subtitle = '', back = null, actions, aside, children, refresh = true } = $props();
 
   let scroller = $state();
   let folded = $state(false);
@@ -65,7 +65,12 @@
       </div>
     {/if}
     <div class="large">
-      <h1>{title}</h1>
+      {#if aside}
+        <!-- something small beside the big title, e.g. Now's counts -->
+        <div class="title-row"><h1>{title}</h1>{@render aside()}</div>
+      {:else}
+        <h1>{title}</h1>
+      {/if}
       {#if subtitle}<p class="muted small">{subtitle}</p>{/if}
     </div>
     <div class="content">{@render children?.()}</div>
@@ -105,6 +110,7 @@
   }
   .large h1 { margin: 2px 0 0; font-size: 32px; line-height: 1.15; font-weight: 750; letter-spacing: -.02em; }
   .large p { margin: 4px 0 0; }
+  .title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
   .ptr { display: grid; place-items: center; overflow: hidden; color: var(--muted); transition: height .2s var(--ease); }
   .ptr.spinning span { animation: spin .8s linear infinite; opacity: 1 !important; }

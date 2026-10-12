@@ -144,6 +144,37 @@ export function deleteRequestWithUndo(id, label) {
   }, 5200);
 }
 
+/* Inbox alerts, yours only. Hidden at once, deleted for good once the undo
+ * window is over, so they are gone on your other phones too. `all` also
+ * takes the older ones the app does not keep (it holds the newest 100):
+ * everything up to the newest id given. */
+export function deleteAlertsWithUndo(ids, label, all = false) {
+  const userId = me();
+  ids = ids.map(Number).filter(Boolean);
+  if (!ids.length) return;
+  const set = (on) => {
+    const h = Object.assign({}, store.hiddenAlerts);
+    for (const id of ids) { if (on) h[id] = true; else delete h[id]; }
+    store.hiddenAlerts = h;
+  };
+  set(true);
+  let undone = false;
+  store.toast(label, { action: { label: 'Undo', run: () => { undone = true; set(false); } } });
+  setTimeout(async () => {
+    if (undone) return;
+    try {
+      const top = Math.max(...ids);
+      const q = supa.from('alerts').delete().eq('user_id', userId);
+      await must(all ? q.lte('id', top) : q.in('id', ids));
+      const gone = new Set(ids);
+      store.mutate(m => { m.alerts = (m.alerts || []).filter(a => (all ? a.id > top : !gone.has(a.id))); });
+    } catch (e) {
+      store.toast(`Could not delete: ${e.message}`, { tone: 'bad' });
+    }
+    set(false);
+  }, 5200);
+}
+
 export const setDone = (id, done) => updateRequest(id, { done });
 
 export async function bumpQty(id, delta) {
@@ -207,6 +238,65 @@ export async function setListingBuy(id, price, currency) {
   };
   const row = await must(supa.from('listings').update(body).eq('listing_id', l.id).select().maybeSingle());
   if (row) store.mutate(m => { m.listings[row.listing_id] = toListing(row); m.teamPrices[row.listing_id] = toTeamPrice(row); });
+}
+
+/* Your saved copy of one listing, gone: hidden at once, deleted once the
+ * undo window is over. viagogo is not touched, so a listing still there
+ * (active, pending, deactivated, expired) is saved again by the next read of
+ * your listings page on a PC; a sold one stays gone. unlink: the request
+ * that carries its ID, which then counts as not listed. */
+export function deleteListingWithUndo(id, label, opts = {}) {
+  const l = store.mirror.listings[String(id)];
+  if (!l) throw new Error('That listing is no longer saved.');
+  if (l.userId !== me()) throw new Error('That listing belongs to someone else.');
+  const set = on => {
+    const h = Object.assign({}, store.hiddenListings);
+    if (on) h[l.id] = true; else delete h[l.id];
+    store.hiddenListings = h;
+  };
+  set(true);
+  let undone = false;
+  store.toast(`Deleted ${label}`, { action: { label: 'Undo', run: () => { undone = true; set(false); } } });
+  setTimeout(async () => {
+    if (undone) return;
+    try {
+      if (opts.unlink) await updateRequest(opts.unlink, { listing: '' });
+      await must(supa.from('listings').delete().eq('listing_id', l.id).eq('user_id', l.userId));
+      store.mutate(m => { delete m.listings[l.id]; delete m.teamPrices[l.id]; });
+    } catch (e) {
+      store.toast(`Could not delete: ${e.message}`, { tone: 'bad' });
+    }
+    set(false);
+  }, 5200);
+}
+
+/* What you changed on viagogo from your phone, saved before a PC reads it:
+ * price (a ticket), tickets and status. viagogo stays the truth: the next
+ * read of your listings page on a PC writes its own numbers over these.
+ * The change goes into the listing's history as a PC read would put it,
+ * and "You'll get" is scaled to the new price and tickets until viagogo
+ * says the exact amount. -> { before, after } */
+export async function editListing(id, fields) {
+  const l = store.mirror.listings[String(id)];
+  if (!l) throw new Error('That listing is not saved yet: read your viagogo listings page on a PC first.');
+  if (l.userId !== me()) throw new Error('That listing belongs to someone else.');
+  const price = Number(fields.price);
+  if (!(price > 0)) throw new Error('Type a price above 0.');
+  const tickets = U.clampInt(fields.tickets, l.tickets ?? 1, 0, 9999);
+  const status = String(fields.status || l.status || '').trim();
+  const next = { price: Math.round(price * 100) / 100, tickets, status };
+  if (next.price === l.price && next.tickets === l.tickets && next.status === l.status) return { before: l, after: l };
+
+  /* the fee as a share of the price stays what it was */
+  const sold = (l.price || 0) * (l.tickets || 0);
+  const payout = l.payout !== null && sold > 0 ? Math.round(l.payout * (next.price * next.tickets) / sold * 100) / 100 : l.payout;
+  const history = (Array.isArray(l.history) ? l.history.slice() : []).concat([{ at: Date.now(), price: next.price, tickets: next.tickets, status: next.status, by: 'app' }]).slice(-30);
+  const body = { price: next.price, tickets: next.tickets, status: next.status, payout, history };
+  const row = await must(supa.from('listings').update(body).eq('listing_id', l.id).eq('user_id', l.userId).select().maybeSingle());
+  if (!row) throw new Error('That listing is no longer saved.');
+  const after = toListing(row);
+  store.mutate(m => { m.listings[row.listing_id] = after; m.teamPrices[row.listing_id] = toTeamPrice(row); });
+  return { before: l, after };
 }
 
 /* ---------------- phone (ntfy) -------------------------------------- */

@@ -7,14 +7,15 @@
   import { router } from '../lib/router.svelte.js';
   import { messageTeam } from '../lib/actions.js';
 
-  let { eventKey = null, section = '' } = $props();
+  let { eventKey = null, section = '', to: only = null } = $props();
   const others = $derived(store.view ? store.view.team.filter(t => !t.me) : []);
   const ev = $derived(eventKey && store.view ? store.view.events.find(e => e.key === eventKey) : null);
   let to = $state([]);
   let text = $state('');
   let busy = $state(false);
 
-  $effect(() => { if (!to.length && others.length) to = others.map(t => t.userId); });
+  /* everyone, unless the sheet was opened for one person (a teammate's listing) */
+  $effect(() => { if (!to.length && others.length) to = only && only.length ? others.filter(t => only.includes(t.userId)).map(t => t.userId) : others.map(t => t.userId); });
 
   async function send() {
     busy = true;
@@ -30,8 +31,8 @@
   }
 </script>
 
-<Sheet title="Tell the team">
-  {#if ev || section}<p class="muted small">{ev ? `[${ev.num}] ${ev.title}` : ''}{section ? ` · Section ${section}` : ''}</p>{/if}
+<Sheet title={only && only.length === 1 ? `Message ${(others.find(t => t.userId === only[0]) || {}).name || 'a teammate'}` : 'Tell the team'}>
+  {#if ev || section}<p class="muted small">{ev ? `[${ev.num}] ${ev.info.name}` : ''}{section ? ` · Section ${section}` : ''}</p>{/if}
   <div class="to">
     {#each others as t (t.userId)}
       <label class="chip" class:on={to.includes(t.userId)}>

@@ -25,13 +25,14 @@ class Store {
   mirror = $state.raw(null);
   scans = $state.raw({});                  // full scans fetched on demand: { [eventKey]: { [sectorId]: scan } }
   hidden = $state.raw({});                 // requests waiting out their undo window
+  hiddenAlerts = $state.raw({});           // inbox alerts waiting out theirs: { [id]: true }
+  hiddenListings = $state.raw({});         // listings waiting out theirs: { [listingId]: true }
   deviceSettings = $state(readJson(DEVICE_KEY, {}));
   sync = $state({ busy: false, at: 0, error: null, notMember: false });
   online = $state(typeof navigator === 'undefined' ? true : navigator.onLine);
   toasts = $state([]);
   now = $state(Date.now());                // ticks every 5 s, so "synced 40 s ago" and staleness stay true
   update = $state({ ready: false, checking: false, checkedAt: 0 });
-  badgeTest = $state(null);                // a number typed in Settings to try the icon badge; null = automatic
   applyUpdate = null;                      // set by main.js: installs the waiting version and reloads
   swRegistration = null;
 
@@ -39,7 +40,7 @@ class Store {
   get stale() { return !!this.user && !this.demo && (!this.sync.at || this.now - this.sync.at > 3 * SYNC_MS + 5000); }
 
   view = $derived(this.user && this.mirror
-    ? buildView(this.mirror, this.user.id, { scans: this.scans, hidden: this.hidden, deviceSettings: this.deviceSettings, now: this.sync.at || Date.now() })
+    ? buildView(this.mirror, this.user.id, { scans: this.scans, hidden: this.hidden, hiddenListings: this.hiddenListings, deviceSettings: this.deviceSettings, now: this.sync.at || Date.now() })
     : null);
 
   /* ---------------- toasts ---------------------------------------- */
@@ -139,6 +140,15 @@ class Store {
     this.scans = {};
   }
 
+  /* a new alert: a notification when they are on and allowed (Settings →
+   * Notifications and badge), else a message inside the app */
+  announce(a) {
+    const toast = () => this.toast(`${a.title}: ${a.message.split('\n')[0]}`, { tone: 'alert', ms: 6000 });
+    const allowed = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+    if (this.deviceSettings.appNotify === false || !allowed) { toast(); return; }
+    showNotification(a.title, a.message, '#/inbox').catch(toast);
+  }
+
   /* ---------------- sync ------------------------------------------ */
 
   syncNow(opts = {}) {
@@ -152,11 +162,7 @@ class Store {
         else this.mirror = Object.assign({}, this.mirror, { devices: res.mirror.devices, pulledAt: res.mirror.pulledAt, serverOffset: res.mirror.serverOffset });
         this.sync.error = null;
         this.sync.at = Date.now();
-        for (const a of res.newAlerts.slice(0, 3).reverse()) this.toast(`${a.title}: ${a.message.split('\n')[0]}`, { tone: 'alert', ms: 6000 });
-        /* TEMPORARY: the extension's "Test phone app notification" (type appTest) becomes a real one */
-        for (const a of res.newAlerts.filter(x => x.type === 'appTest').slice(0, 3)) {
-          showNotification(a.title, a.message, '#/inbox').catch(() => {});
-        }
+        for (const a of res.newAlerts.slice(0, 3).reverse()) this.announce(a);
       } catch (e) {
         this.sync.error = e.message;
         if (e.notMember) this.sync.notMember = true;

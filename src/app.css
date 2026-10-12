@@ -29,6 +29,8 @@
   --sec-unread: #eceef1; --sec-zero: #d3d7de; --sec-sold-line: #b9bec7; --sec-ink: #1f2430;
   --sec-l1: #dce8fd; --sec-l2: #b2ccfa; --sec-l3: #5f93ef; --sec-l4: #1f5fd6;
   --map-listing: #c026d3;
+  /* ticket badges on the map: requested + listed, requested only, listed only */
+  --badge-req: #2b3040; --badge-req-ink: #ffffff; --badge-list: #f2b705; --badge-list-ink: #241a00;
   --map-stage: #9b9da3; --map-stage-ink: #111317;
   --sec-off: #f4f5f7; --sec-standing: #e9e4f6;
 
@@ -58,6 +60,7 @@
     --sec-unread: #272b34; --sec-zero: #353a45; --sec-sold-line: #4a505d; --sec-ink: #e8eaf0;
     --sec-l1: #1f3254; --sec-l2: #24457f; --sec-l3: #3a6fd0; --sec-l4: #5b93f5;
     --map-listing: #d946ef;
+    --badge-req: #e8eaf0; --badge-req-ink: #16181d; --badge-list: #fbbf24; --badge-list-ink: #241a00;
     --map-stage: #4a4e57; --map-stage-ink: #e8eaf0;
     --sec-off: #1f2229; --sec-standing: #2c2740;
   }
@@ -77,6 +80,7 @@
   --sec-unread: #272b34; --sec-zero: #353a45; --sec-sold-line: #4a505d; --sec-ink: #e8eaf0;
   --sec-l1: #1f3254; --sec-l2: #24457f; --sec-l3: #3a6fd0; --sec-l4: #5b93f5;
   --map-listing: #d946ef;
+  --badge-req: #e8eaf0; --badge-req-ink: #16181d; --badge-list: #fbbf24; --badge-list-ink: #241a00;
   --map-stage: #4a4e57; --map-stage-ink: #e8eaf0;
   --sec-off: #1f2229; --sec-standing: #2c2740;
 }
@@ -129,8 +133,12 @@ a { color: var(--accent); text-decoration: none; }
 
 .icon-btn {
   display: inline-grid; place-items: center; width: var(--tap); height: var(--tap);
+  /* padding 0: iOS gives buttons side padding of its own, which leaves the
+   * 24px icon less room than it needs and pushes it off the circle */
+  padding: 0; -webkit-appearance: none; appearance: none;
   border: 0; border-radius: 50%; background: transparent; color: var(--accent); cursor: pointer;
 }
+.icon-btn svg { display: block; }
 .icon-btn:active { background: var(--soft); }
 
 .field { display: grid; gap: 6px; }

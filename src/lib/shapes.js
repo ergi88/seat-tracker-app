@@ -28,7 +28,7 @@ export const toListing = r => ({
   id: r.listing_id, userId: r.user_id, eventKey: r.event_key || null, sectorId: r.sector_id || null, vgEventId: r.vg_event_id || '',
   title: r.title || '', when: r.event_when || '', section: r.section || '', row: r.row_label || '', status: r.status || '',
   currency: r.currency || '', price: numOr(r.price), payout: numOr(r.payout), tickets: numOr(r.tickets),
-  recommended: numOr(r.recommended), performance: r.performance || '', history: r.history || [],
+  performance: r.performance || '', history: r.history || [],
   seenAt: time(r.seen_at), seenBy: r.seen_by || '', venue: r.venue || '',
   track: r.track === 'off' ? 'off' : 'auto',
   lastSweepAt: time(r.last_sweep_at),

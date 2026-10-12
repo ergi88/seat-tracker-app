@@ -27,6 +27,12 @@ export function day(t, now = Date.now()) {
   return d.toLocaleDateString('en-GB', opts).replace(',', '');
 }
 
+/* an event's day in full: "Thursday 12 November 2026" */
+export function longDay(t) {
+  if (t === null || t === undefined) return '';
+  return new Date(t).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).replace(',', '');
+}
+
 /* an event's day against today: "today", "tomorrow", "in 12 days", "3 days ago" */
 export function fromToday(t, now = Date.now()) {
   if (t === null || t === undefined) return '';

@@ -13,7 +13,7 @@ const ICON = 'icons/icon-192.png';
 /* where a tap on it goes: a hash route of this app, e.g. '#/inbox' */
 export async function showNotification(title, body, route) {
   if (typeof Notification === 'undefined') throw new Error('This browser has no notifications.');
-  if (Notification.permission !== 'granted') throw new Error('Notifications are not allowed yet. Press Ask for permission first.');
+  if (Notification.permission !== 'granted') throw new Error('Notifications are not allowed.');
   const url = new URL(route || '#/', location.href.split('#')[0]).href;
   const opts = { body, icon: ICON, badge: ICON, tag: 'sk-' + Date.now(), data: { url } };
   const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;

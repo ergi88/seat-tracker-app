@@ -136,9 +136,9 @@
 
   /* ---------------- profit ------------------------------------------ */
 
-  /* listing: { price, payout, tickets, currency, recommended } as read on viagogo.
+  /* listing: { price, payout, tickets, currency } as read on viagogo.
    * -> { missing: 'listing' | 'rate' | 'buy' | null, tickets, ratio, payoutL, costL,
-   *      perTicket, total, winRate, breakEven, atRecommended } — all money in lek,
+   *      perTicket, total, winRate, breakEven } — all money in lek,
    *      breakEven in the listing's currency */
   function profitOf(listing, buy, rates) {
     const tickets = Number(listing && listing.tickets) || 0;
@@ -160,13 +160,6 @@
       winRate: costL > 0 ? payoutL / costL : null,
       breakEven: costL / sellRate / ratio
     });
-    if (Number(listing.recommended) > 0) {
-      const recL = Number(listing.recommended) * ratio * sellRate;
-      out.atRecommended = {
-        price: Number(listing.recommended), perTicket: recL - costL,
-        total: (recL - costL) * tickets, winRate: costL > 0 ? recL / costL : null
-      };
-    }
     return out;
   }
 

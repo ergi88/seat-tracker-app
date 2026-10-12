@@ -211,18 +211,24 @@
   const dateOnly = t => !!parseWhen(t).day && (fold(t).match(/[a-z]{4,}/g) || []).length <= 1;
 
   function parseCard(card) {
-    const texts = blocksOf(card)
-      .filter(b => !b.el.closest('button, a[role="button"], [role="button"]'))
-      .map(b => b.text);
-    const joined = texts.join(' ');
-
-    let listing = '', section = '', m;
-    for (const t of texts) {
-      if (!listing && (m = LISTING.exec(t))) listing = m[1];
-      else if (!section && (m = SECTION.exec(t))) section = m[1].trim();
-    }
-    if (!listing && (m = LISTING.exec(joined))) listing = m[1];
+    const texts = cardTexts(card);
+    let listing = '', m;
+    for (const t of texts) if (!listing && (m = LISTING.exec(t))) listing = m[1];
+    if (!listing && (m = LISTING.exec(texts.join(' ')))) listing = m[1];
     if (!listing) return null;
+    return Object.assign({ listing }, parseDetails(card, texts));
+  }
+
+  const cardTexts = card => blocksOf(card)
+    .filter(b => !b.el.closest('button, a[role="button"], [role="button"]'))
+    .map(b => b.text);
+
+  /* what a listing's box shows besides its ID: tickets, section, event, venue, date */
+  function parseDetails(card, texts) {
+    texts = texts || cardTexts(card);
+    const joined = texts.join(' ');
+    let section = '', m;
+    for (const t of texts) if (!section && !LISTING.test(t) && (m = SECTION.exec(t))) section = m[1].trim();
 
     const q = QTY.exec(joined) || /(\d{1,3})\s+tickets?\b/i.exec(joined);
     const qty = q ? parseInt(q[1], 10) : 0;
@@ -232,10 +238,34 @@
     const words = rest.filter(t => t !== when && /[a-z]{3}/i.test(fold(t)));
     const title = words[0] || '';
     return {
-      listing, qty, section, title,
+      qty, section, title,
       venue: words[1] || '',
       when: when || (parseWhen(title).day ? title : '')
     };
+  }
+
+  /* The price step of selling (…/Sell/PriceDetails): the listing has no ID
+   * yet, but the same box shows the event, the date, "4x e-ticket" and
+   * "Section E102". Found from the section line, climbing to the smallest
+   * box that also holds the date and the tickets. -> details | null */
+  function readSellDetails(doc) {
+    const body = doc && doc.body;
+    if (!body) return null;
+    const walker = doc.createTreeWalker(body, 4 /* NodeFilter.SHOW_TEXT */);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const p = n.parentElement;
+      if (!p || !SECTION.test(n.nodeValue.trim()) || p.closest('script, style, noscript, template, [data-sk-panel], [data-sk-line]')) continue;
+      for (let e = p, depth = 0; e && e !== body && depth < 8; e = e.parentElement, depth++) {
+        const t = textOf(e);
+        if ((t.match(/\bsection\b/gi) || []).length > 1) break;
+        if (parseWhen(t).day && QTY.test(t)) {
+          const d = parseDetails(e);
+          if (d.section) return d;
+          break;
+        }
+      }
+    }
+    return null;
   }
 
   function readListings(doc) {
@@ -323,7 +353,7 @@
   const AMOUNT_ONLY = /^\s*(?:US\$|[$€£]|Lekë|Leke|Lek|RSD|USD|EUR|GBP|ALL)?\s*\d[\d.,\s ]*\s*(?:US\$|[$€£]|Lekë|Leke|Lek|L|RSD|USD|EUR|GBP|ALL|дин\.?)?\s*$/i;
 
   /* one listing card -> { id, status, title, venue, when, currency, price, payout, tickets,
-   *                        section, row, performance, recommended, vgEventId } */
+   *                        section, row, performance, vgEventId } */
   function parseListingCard(card) {
     const money = t => (SK.profit ? SK.profit.parseMoney(t) : null);
     /* buttons are skipped, except one holding just an amount: viagogo puts the
@@ -360,7 +390,6 @@
     const sec = texts.map(t => /^section\s+(.+?)(?:\s*[•·|,]\s*row\s+(.+))?$/i.exec(t)).find(Boolean);
     const tickets = /(\d+)\s+tickets?\s+available/i.exec(joined);
     const perf = indexOf(/^listing\s+performance$/i);
-    const recommended = money((/recommended\s+price:?\s*([^|]+)/i.exec(joined) || [])[1]);
     const link = card.querySelector('a[href*="/E-"]');
     const vg = link ? /\/E-(\d+)/.exec(link.getAttribute('href') || '') : null;
     return {
@@ -372,7 +401,6 @@
       section: sec ? sec[1].trim() : '',
       row: sec && sec[2] ? sec[2].trim() : '',
       performance: perf >= 0 && texts[perf + 1] && texts[perf + 1].length <= 40 ? texts[perf + 1] : '',
-      recommended: recommended ? recommended.amount : null,
       vgEventId: vg ? vg[1] : ''
     };
   }
@@ -680,12 +708,10 @@
    *   the page sends EXPIRED. Unknown filter values are ignored, not refused —
    *   a typo would quietly return everything. PricePerTicket is the price the
    *   seller set; DisplayPricePerTicket and PricingRecommendation hold
-   *   placeholders and are never read.
-   *   "Recommended price" is not in it: each card asks
-   *   /recommendedListing/isListingRecommended?listingId=<id> on its own
-   *   (RecommendedMidPrice). "Listing performance" is in neither — the page
-   *   works it out itself — so a listing read here keeps the one its card
-   *   showed. ------------------------------------------------------------- */
+   *   placeholders and are never read. viagogo's recommended price is
+   *   never read at all (not worth a request per listing). "Listing
+   *   performance" is not in it either — the page works it out itself — so
+   *   a listing read here keeps the one its card showed. ------------------------------------------------------------- */
 
   const API_STATUSES = 'ACTIVE|PENDING|DEACTIVATED|EXPIRED';
 
@@ -694,8 +720,6 @@
     const filters = `STATUS:${API_STATUSES}` + (q ? `,Q:${String(q).replace(/[,|]/g, ' ').trim()}` : '');
     return `/listings/getListings?filters=${encodeURIComponent(filters)}&sort=${encodeURIComponent('action_date asc')}&page=${page}&pageSize=${size}&isMLBLinked=false`;
   }
-
-  const recommendationUrl = id => `/recommendedListing/isListingRecommended?listingId=${encodeURIComponent(id)}&isRiskManagementEnabled=true`;
 
   const apiList = json => (json && Array.isArray(json.Listing) ? json.Listing : []);
   const apiTotal = json => {
@@ -735,19 +759,8 @@
       section: str(x.Section, 40),
       row: str(x.Rows, 20),
       performance: '',
-      recommended: null,
       vgEventId: String(x.EventId === null || x.EventId === undefined ? '' : x.EventId).replace(/\D/g, '')
     };
-  }
-
-  /* isListingRecommended -> the card's "Recommended price", or null */
-  function recommendedFromApi(json) {
-    if (!json) return null;
-    const n = Number(json.RecommendedMidPrice);
-    if (Number.isFinite(n) && n > 0) return n;
-    const msg = json.RecommendedPriceMessage && json.RecommendedPriceMessage.Message;
-    const m = SK.profit && msg ? SK.profit.parseMoney(String(msg).replace(/^[^$€£\d]*/, '')) : null;
-    return m && m.amount > 0 ? m.amount : null;
   }
 
   SK.viagogo = {
@@ -755,9 +768,9 @@
     isEventPage, eventIdOf, selectedSectionOf, sectionUrl, readEventInfo, readSections, readRows, rowCount, firstRowSig, showMoreButton, listFooter,
     isListingsPage, isPricePage, readListingCards, parseListingCard, listingStatus, LISTING_STATUSES,
     paginationOf, currentPage, arrowDead, sweepUrl, sweepReady, SWEEP_TABS,
-    isConfirmedPage, readListings, parseCard, parseWhen, titleWords,
+    isConfirmedPage, readListings, parseCard, parseDetails, readSellDetails, parseWhen, titleWords,
     listingKey, sectionKey, scoreEvent, pickEvent, sectorFor,
-    listingsApiUrl, recommendationUrl, apiList, apiTotal, listingFromApi, recommendedFromApi, API_STATUSES
+    listingsApiUrl, apiList, apiTotal, listingFromApi, API_STATUSES
   };
 
   if (typeof module === 'object' && module.exports) module.exports = SK;

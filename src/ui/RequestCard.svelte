@@ -1,11 +1,11 @@
 <script>
   /* One request, its status as the stripe on the left (as in the
-   * extension). Swipe right: done. Swipe left: delete (with Undo). Tap:
+   * extension). Swipe right: done. Swipe left: delete (asks first). Tap:
    * the request's sheet. */
   import { SK } from '../lib/sk.js';
   import { router } from '../lib/router.svelte.js';
   import { store } from '../lib/store.svelte.js';
-  import { setDone, deleteRequestWithUndo } from '../lib/actions.js';
+  import { setDone } from '../lib/actions.js';
 
   let { r, showEvent = false } = $props();
 
@@ -46,7 +46,7 @@
         });
       } catch (e) { store.toast(e.message, { tone: 'bad' }); }
     } else if (d <= -TRIGGER) {
-      deleteRequestWithUndo(r.id, `#${r.num} ${r.code}`);
+      router.openSheet({ kind: 'deleteRequest', id: r.id });
     }
   }
   function open() {

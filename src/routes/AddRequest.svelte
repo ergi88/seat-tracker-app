@@ -83,7 +83,7 @@
         <span>Event</span>
         <select class="input" bind:value={evKey} onchange={() => { secId = ''; secText = ''; cats = []; }}>
           <option value="" disabled>Pick an event</option>
-          {#each events as e}<option value={e.key}>[{e.num}] {e.title}</option>{/each}
+          {#each events as e}<option value={e.key}>[{e.num}] {e.info.name}</option>{/each}
         </select>
       </label>
 
