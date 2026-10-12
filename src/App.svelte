@@ -4,6 +4,7 @@
   import { router } from './lib/router.svelte.js';
   import TabBar from './ui/TabBar.svelte';
   import Toasts from './ui/Toasts.svelte';
+  import InstallPrompt from './ui/InstallPrompt.svelte';
   import SignIn from './routes/SignIn.svelte';
   import Now from './routes/Now.svelte';
   import Events from './routes/Events.svelte';
@@ -73,6 +74,7 @@
     {/key}
   {/if}
 {/if}
+{#if store.ready && !sheet}<InstallPrompt tabbar={!!store.user && route.name !== 'add' && route.name !== 'map'} />{/if}
 <Toasts />
 
 <style>

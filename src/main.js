@@ -1,3 +1,4 @@
+import './lib/install.svelte.js';          // first: the install prompt can fire before the app shows
 import './lib/sk.js';
 import './app.css';
 import { mount } from 'svelte';
