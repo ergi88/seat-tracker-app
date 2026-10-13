@@ -35,7 +35,7 @@
       c.total++; if (p[2]) c.free++;
       per.set(k, c);
     }
-    const picked = new Set(mine.filter(r => !r.done).flatMap(r => r.cats.map(String)));
+    const picked = new Set(mine.filter(r => !r.done && !r.bought).flatMap(r => r.cats.map(String)));
     return [...per.entries()].map(([k, c]) => {
       const cat = (ev.cats || {})[k] || {};
       return {
@@ -53,7 +53,7 @@
    * of free seats holds floor(run / N) groups, and on Posttick a seat at a
    * price you did not pick breaks a run. Starts from your open request here,
    * if there is one, else the last count you tried. */
-  const start = untrack(() => (v ? v.requests.find(r => r.eventKey === eventKey && String(r.sec) === String(sectorId) && !r.done) : null));
+  const start = untrack(() => (v ? v.requests.find(r => r.eventKey === eventKey && String(r.sec) === String(sectorId) && !r.done && !r.bought) : null));
   /* eFinity's bar tables: one sector, one row per table, a table free only
    * when every seat is (the site will not sell part of one) */
   const bar = $derived(!!(s && s.meta && s.meta.bar));
@@ -87,7 +87,8 @@
   function setQty(n) { qty = n; store.saveDeviceSettings({ sheetQty: n }); }
   function togglePrice(k) { pick = pick.includes(k) ? pick.filter(x => x !== k) : [...pick, k]; navigator.vibrate?.(6); }
 
-  const othersWant = $derived(s ? s.wanted - mine.filter(r => !r.done).reduce((n, r) => n + Number(r.qty || 0), 0) : 0);
+  /* wanted counts no bought tickets, so neither does what is yours of it */
+  const othersWant = $derived(s ? s.wanted - mine.filter(r => !r.done && !r.bought).reduce((n, r) => n + Number(r.qty || 0), 0) : 0);
   let loading = $state(true);
 
   /* fetch on open; untracked, because fetching writes store.scans, which this sheet reads */
@@ -114,14 +115,15 @@
     .sort((a, b) => b.groups - a.groups || b.runs[0].len - a.runs[0].len || SK.rules.cmpRow(a.row, b.row)));
   const hiddenRows = $derived(rowsAll.length - rows.length);
 
-  /* from one sheet to another: close this one first, as a native stack would */
+  /* away from the sheets altogether: close this one first, for good */
   function then(fn) {
-    router.closeSheet();
+    router.closeSheet({ all: true });
     setTimeout(fn, 320);
   }
   const add = () => then(() => router.go(href.add(eventKey) + '&sec=' + encodeURIComponent(s.code)));
-  const openRequest = id => then(() => router.openSheet({ kind: 'request', id }));
-  const openListing = id => then(() => router.openSheet({ kind: 'listing', id }));
+  /* over this one: closing the request or listing brings this sector back */
+  const openRequest = id => router.swapSheet({ kind: 'request', id });
+  const openListing = id => router.swapSheet({ kind: 'listing', id });
 </script>
 
 {#if s}
@@ -198,7 +200,7 @@
         {#each mine as r (r.id)}
           <button class="item {r.done ? 'none' : r.tone}" onclick={() => openRequest(r.id)}>
             <span class="grow"><span><b>#{r.num} ×{r.qty}</b>{#if r.priceTag}<span class="muted">{' · ' + r.priceTag}</span>{/if}{#if r.client}<span class="muted">{' · ' + r.client}</span>{/if}</span>
-              <span class="sub">{r.free ?? '—'} free · {SK.util.plural(r.options, 'option')}</span></span>
+              <span class="sub">{r.bought && !r.done ? 'you have these · not tracked' : `${r.free ?? '—'} free · ${SK.util.plural(r.options, 'option')}`}</span></span>
             {#if r.profit && !r.profit.missing}<span class="num small {r.profit.total >= 0 ? 'ok' : 'bad'}">{lek(r.profit.total, true)}</span>{/if}
             <span class="pill {r.done ? 'none' : r.tone}">{r.done ? 'DONE' : r.status}</span>
           </button>
@@ -283,6 +285,7 @@
     padding: 10px 12px; border: 0; border-radius: 12px; background: var(--soft); border-left: 4px solid transparent; color: var(--ink);
   }
   .item.ok { border-left-color: var(--s-ok); } .item.low { border-left-color: var(--s-low); } .item.bad { border-left-color: var(--s-bad); }
+  .item.bought { border-left-color: var(--s-bought); }
   .item.listing { border-left-color: var(--map-listing); }
   .item.static { cursor: default; }
   .item .grow { flex: 1; min-width: 0; display: grid; }

@@ -7,7 +7,8 @@
 
   /* head: a strip under the title that never scrolls away (links, quick actions) */
   /* label: the dialog's name when the sheet draws its own heading instead of a title */
-  let { title = '', label = '', head, children, footer } = $props();
+  /* fixed: always the full height, so switching tabs inside it never makes it jump */
+  let { title = '', label = '', fixed = false, head, children, footer } = $props();
 
   let panel = $state();
   let dy = $state(0);
@@ -52,7 +53,7 @@
 </script>
 
 <div class="scrim" class:shown onclick={scrimTap} role="presentation"></div>
-<div class="sheet" class:shown class:dragging bind:this={panel} tabindex="-1" role="dialog" aria-modal="true" aria-label={label || title}
+<div class="sheet" class:shown class:dragging class:fixed bind:this={panel} tabindex="-1" role="dialog" aria-modal="true" aria-label={label || title}
   style:transform={shown ? `translateY(${dy}px)` : 'translateY(100%)'}>
   <!-- dragging is a shortcut; Esc, the scrim and Back close the sheet too -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -81,6 +82,8 @@
     padding-bottom: var(--safe-b);
   }
   .sheet.dragging { transition: none; }
+  .sheet.fixed { height: calc(100dvh - var(--safe-t) - 24px); }
+  .sheet.fixed .body { flex: 1 1 auto; min-height: 0; }
   .grab { touch-action: none; cursor: grab; padding: 8px 16px 4px; flex: none; }
   .handle { display: block; width: 38px; height: 5px; border-radius: 3px; background: var(--softer); margin: 0 auto 8px; }
   .head { font-size: 17px; font-weight: 700; text-align: center; padding-bottom: 6px; }

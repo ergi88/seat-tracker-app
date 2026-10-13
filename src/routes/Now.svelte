@@ -14,11 +14,12 @@
     if (!v) return [];
     return v.events.filter(e => e.open > 0 && !e.archived);
   });
-  /* how your open requests stand, per event: the only numbers a card shows */
+  /* how your open requests stand, per event, and how many you have bought: the only numbers a card shows */
+  const ZERO = { ok: 0, low: 0, bad: 0, none: 0, bought: 0 };
   const counts = $derived.by(() => {
     const out = {};
-    for (const r of v ? v.open : []) {
-      const c = out[r.eventKey] || (out[r.eventKey] = { ok: 0, low: 0, bad: 0, none: 0 });
+    for (const r of v ? v.open.concat(v.requests.filter(x => x.bought && !x.done)) : []) {
+      const c = out[r.eventKey] || (out[r.eventKey] = Object.assign({}, ZERO));
       c[r.tone]++;
     }
     return out;
@@ -69,7 +70,7 @@
       <!-- nearest first; the event page has the rest -->
       <div class="cards">
         {#each byEvent as e (e.key)}
-          {@const c = counts[e.key] || { ok: 0, low: 0, bad: 0, none: 0 }}
+          {@const c = counts[e.key] || ZERO}
           <a class="evcard {e.tone}" href={href.event(e.key)}>
             <DateTile time={e.time} size="fill" />
             <span class="body">
@@ -88,6 +89,7 @@
                 {#if c.low}<span class="pill low num">{c.low} low</span>{/if}
                 {#if c.ok}<span class="pill ok num">{c.ok} ok</span>{/if}
                 {#if c.none}<span class="pill none num">{c.none} not scanned</span>{/if}
+                {#if c.bought}<span class="pill bought num">{c.bought} bought</span>{/if}
               </span>
             </span>
           </a>
@@ -126,6 +128,7 @@
   .evcard.ok::before { background: var(--s-ok); }
   .evcard.low::before { background: var(--s-low); }
   .evcard.bad::before { background: var(--s-bad); }
+  .evcard.bought::before { background: var(--s-bought); }
   .body { flex: 1; min-width: 0; display: grid; gap: 4px; }
   .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .name {

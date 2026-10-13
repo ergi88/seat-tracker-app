@@ -25,7 +25,7 @@
   /* the requests: filtered by status, and folded away if you like (remembered per event) */
   const TONES = [
     { key: 'bad', label: 'Short' }, { key: 'low', label: 'Low' },
-    { key: 'ok', label: 'OK' }, { key: 'none', label: 'Not scanned' }
+    { key: 'ok', label: 'OK' }, { key: 'none', label: 'Not scanned' }, { key: 'bought', label: 'Bought' }
   ];
   const FOLD_KEY = 'sk.foldedRequests';
   const readFolded = () => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '[]'); } catch (e) { return []; } };
@@ -222,6 +222,7 @@
   .filters button.low.on { background: var(--lowbg); color: var(--low); box-shadow: inset 0 0 0 1.5px var(--low); }
   .filters button.ok.on { background: var(--okbg); color: var(--ok); box-shadow: inset 0 0 0 1.5px var(--ok); }
   .filters button.none.on { background: var(--nonebg); color: var(--none); box-shadow: inset 0 0 0 1.5px var(--none); }
+  .filters button.bought.on { background: var(--boughtbg); color: var(--bought); box-shadow: inset 0 0 0 1.5px var(--bought); }
   .add-card { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; border-radius: var(--r-card); border: 1.5px dashed var(--line); color: var(--accent); font-weight: 600; }
   .sectors { margin-top: 10px; }
   .code { font-weight: 700; min-width: 64px; }

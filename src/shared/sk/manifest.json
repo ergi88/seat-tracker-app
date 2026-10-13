@@ -3,7 +3,7 @@
   "files": {
     "core/config.js": "b395f6b42aacbe2bf047351f89b955cc043bda1c0090028a454a806a699e11af",
     "core/util.js": "879c6cd5dc038cb18b26274350ad0b134fbc4eacb54d77e5bd0e70ade1bf029d",
-    "core/rules.js": "fd6dabcf897d591304584ba55073f99e3a536b67e47fe388fc9f9de3abefb0ac",
+    "core/rules.js": "86b78f28df61d2115167138ea93f5ab2b112274eed9d5193ee56dc04eef008c0",
     "core/registry.js": "168aa40628d4c728ea9e33e677aa47f1d279a5dd2b71b918e18e879fa6877b2d",
     "core/settings.js": "5c5467795c2b67cdbbd2ef7a461bf612aaadacf08c519570ed99f9d1bfa8bc85",
     "core/profit.js": "5649cb6811be31d4f7b3a818732206179f545e17f574b8357af1c76646ecb604",

@@ -20,7 +20,7 @@ export const toEvent = r => ({
 export const toRequest = r => ({
   id: r.id, userId: r.user_id, eventKey: r.event_key, num: r.num, sec: r.sec, qty: r.qty,
   cats: (r.cats || []).map(String), client: r.client || '', listing: r.listing || '',
-  warn: r.warn, opts: r.opts, together: r.together !== false, done: !!r.done, createdAt: time(r.created_at),
+  warn: r.warn, opts: r.opts, together: r.together !== false, done: !!r.done, bought: !!r.bought, createdAt: time(r.created_at),
   buyPrice: r.buy_price === null || r.buy_price === undefined ? null : Number(r.buy_price), buyCurrency: r.buy_currency || 'ALL'
 });
 

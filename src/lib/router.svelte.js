@@ -10,11 +10,22 @@
  * Changing route runs inside a view transition, sliding forward into a
  * detail page and back out of it, cross-fading between tabs. Sheets put
  * an entry in the history, so the phone's back gesture closes them.
+ *
+ * A sheet opened from another sheet (swapSheet) keeps that one as `back`:
+ * closing it, by any means, brings the one under it back, as a native
+ * stack would. Going to the sheet it came from just goes back, so moving
+ * between a sector and its request never piles up.
  * ------------------------------------------------------------------ */
 import { flushSync } from 'svelte';
 
 export const TABS = ['now', 'events', 'money', 'inbox'];
 const DEPTH = { now: 0, events: 0, money: 0, inbox: 0, settings: 1, event: 1, add: 2, map: 2 };
+
+/* the same sheet, whatever tab it was on */
+const sameSheet = (a, b) => !!a && !!b && a.kind === b.kind && (a.id ?? null) === (b.id ?? null) &&
+  (a.eventKey ?? null) === (b.eventKey ?? null) && String(a.sectorId ?? '') === String(b.sectorId ?? '');
+/* at most `n` sheets remembered under this one */
+const keep = (s, n) => (s && n > 0 ? Object.assign({}, s, { back: keep(s.back, n - 1) }) : null);
 
 function parse(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
@@ -27,7 +38,8 @@ function parse(hash) {
 
 class Router {
   route = $state(parse(typeof location === 'undefined' ? '' : location.hash));
-  sheet = $state(null);                         // { kind, ...props }
+  sheet = $state(null);                         // { kind, ...props, back: the sheet under it }
+  dropBack = false;                             // the next close goes all the way out
   lastTab = $state('now');
 
   /* the hashes visited in this session, so Back knows whether there is
@@ -42,7 +54,7 @@ class Router {
       this.apply(parse(h));
     });
     addEventListener('popstate', e => {
-      if (this.sheet && !(e.state && e.state.sheet)) this.sheet = null;
+      if (this.sheet && !(e.state && e.state.sheet)) this.restore();
     });
   }
 
@@ -78,10 +90,30 @@ class Router {
     history.pushState({ sheet: true }, '');
   }
 
-  closeSheet() {
+  /* Open `next` over the current sheet, which comes back when `next` closes.
+   * `remember` is merged into the one kept (e.g. the tab it was on). */
+  swapSheet(next, remember) {
+    const cur = this.sheet;
+    if (!cur) { this.openSheet(next); return; }
+    if (sameSheet(cur.back, next)) { this.sheet = cur.back; return; }
+    this.sheet = Object.assign({}, next, { back: keep(Object.assign({}, cur, remember), 3) });
+  }
+
+  /* all: close for good, not back to the sheet underneath (e.g. on the way to another page) */
+  closeSheet(opts) {
     if (!this.sheet) return;
-    if (history.state && history.state.sheet) history.back();   // popstate clears it
-    else this.sheet = null;
+    if (opts && opts.all) this.dropBack = true;
+    if (history.state && history.state.sheet) history.back();   // popstate restores or clears
+    else this.restore();
+  }
+
+  /* the sheet under the one that closed, or none */
+  restore() {
+    const back = this.dropBack ? null : this.sheet && this.sheet.back;
+    this.dropBack = false;
+    if (!back) { this.sheet = null; return; }
+    this.sheet = back;
+    history.pushState({ sheet: true }, '');
   }
 }
 

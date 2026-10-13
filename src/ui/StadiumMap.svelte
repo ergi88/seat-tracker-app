@@ -52,11 +52,14 @@
         .filter(k => priceOf[k] && (!picked || picked.includes(k))).sort(byPrice).slice(0, 6)
         .map(k => priceOf[k].color || 'var(--muted)');
       const mine = s ? requests.filter(r => !r.done && String(r.sec) === String(s.id)) : [];
-      const tone = mine.reduce((t, r) => (TONE_RANK[r.tone] > TONE_RANK[t] ? r.tone : t), 'none');
+      /* open requests win; violet (bought) only when every one here is bought */
+      const open = mine.filter(r => !r.bought);
+      const held = !open.length && mine.length > 0;
+      const tone = held ? 'bought' : open.reduce((t, r) => (TONE_RANK[r.tone] > TONE_RANK[t] ? r.tone : t), 'none');
       const lst = s ? listings.filter(l => String(l.sectorId) === String(s.id)) : [];
       /* tickets wanted here, else tickets listed here: one request per section
        * is the usual, so a count of them would read 1 everywhere */
-      const wantedQty = mine.reduce((n, r) => n + (Number(r.qty) || 0), 0);
+      const wantedQty = (held ? mine : open).reduce((n, r) => n + (Number(r.qty) || 0), 0);
       const listedQty = lst.reduce((n, l) => n + (Number(l.tickets) || 0), 0);
       /* both when a request here has its listing; a listing whose request is
        * done or gone counts as a listing alone */
@@ -82,9 +85,9 @@
       }
       out[sec.code] = {
         sector: s, free, fill, sold, dots, tables, perTable, wanted: s ? s.wanted : 0,
-        reqTone: mine.length ? tone : null, reqCount: mine.length,
+        reqTone: mine.length ? tone : null, reqCount: mine.length, held,
         tickets: wantedQty || listedQty, badge, dim: !fits,
-        ticketsOf: badge === 'both' ? 'requested and listed' : badge === 'req' ? 'requested, not listed yet' : 'listed, no request'
+        ticketsOf: held ? 'bought' : badge === 'both' ? 'requested and listed' : badge === 'req' ? 'requested, not listed yet' : 'listed, no request'
       };
     }
     return out;
@@ -315,8 +318,8 @@
         {@const by = s.shape === 'rect' ? s.y + 10 : s.shape === 'grid' ? s.y - 10 : s.label.y - (big ? s.label.size : 14)}
         {@const bny = by - 3}
         {@const r = String(i.tickets).length > 2 ? 15 : 12}
-        <circle cx={bx} cy={by} r={r} class="badge {i.badge}"><title>{i.tickets} tickets {i.ticketsOf}</title></circle>
-        <text x={bx} y={bny} dy="5" font-size={r === 12 ? 14 : 12} class="badge-n {i.badge}">{i.tickets}</text>
+        <circle cx={bx} cy={by} r={r} class="badge {i.badge}" class:held={i.held}><title>{i.tickets} tickets {i.ticketsOf}</title></circle>
+        <text x={bx} y={bny} dy="5" font-size={r === 12 ? 14 : 12} class="badge-n {i.badge}" class:held={i.held}>{i.tickets}</text>
       {/if}
     </g>
   {/each}
@@ -345,6 +348,7 @@
 
   .req { fill: none; stroke-width: 6; stroke-linejoin: round; }
   .req.ok { stroke: var(--s-ok); } .req.low { stroke: var(--s-low); } .req.bad { stroke: var(--s-bad); } .req.none { stroke: var(--s-none); }
+  .req.bought { stroke: var(--s-bought); }
 
   text { text-anchor: middle; dominant-baseline: middle; pointer-events: none; font-family: system-ui, -apple-system, sans-serif; }
   .code { fill: var(--sec-ink); font-weight: 650; }
@@ -373,4 +377,7 @@
   .badge-n { fill: #fff; font-weight: 800; }
   .badge-n.req { fill: var(--badge-req-ink); }
   .badge-n.list { fill: var(--badge-list-ink); }
+  /* every request here is bought */
+  .badge.held { fill: var(--s-bought); }
+  .badge-n.held { fill: #fff; }
 </style>

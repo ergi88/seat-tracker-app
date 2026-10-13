@@ -5,7 +5,7 @@
  *   { row, label, x, y, free, cat, id }
  * Everything after that happens here, once, for every site: ordering a
  * row, finding aisles, packing the scan, blocks for a price filter,
- * options and the OK / LOW / SPLIT / SHORT status.
+ * options and the OK / LOW / SPLIT / SHORT status, and BOUGHT above them.
  *
  * Exposed as SK.rules. No chrome.*, no DOM.
  * ------------------------------------------------------------------ */
@@ -15,18 +15,20 @@
 
   const GAP_FACTOR = 1.75;
 
-  const STATUS = { OK: 'OK', LOW: 'LOW', SPLIT: 'SPLIT', SHORT: 'SHORT', NONE: 'NOT SCANNED' };
+  const STATUS = { OK: 'OK', LOW: 'LOW', SPLIT: 'SPLIT', SHORT: 'SHORT', NONE: 'NOT SCANNED', BOUGHT: 'BOUGHT' };
 
   const DOT = {
     'OK': '\u{1F7E2}',
     'LOW': '\u{1F7E0}',
     'SPLIT': '\u{1F534}',
     'SHORT': '\u{1F534}',
-    'NOT SCANNED': '⚪'
+    'NOT SCANNED': '⚪',
+    'BOUGHT': '\u{1F7E3}'
   };
 
-  /* worst first when ranking several requests together */
-  const RANK = { 'OK': 0, 'LOW': 1, 'NOT SCANNED': 2, 'SPLIT': 3, 'SHORT': 4 };
+  /* worst first when ranking several requests together; BOUGHT below
+   * everything, so any open request in the same place wins */
+  const RANK = { 'BOUGHT': -1, 'OK': 0, 'LOW': 1, 'NOT SCANNED': 2, 'SPLIT': 3, 'SHORT': 4 };
 
   const FILLABLE = new Set([STATUS.OK, STATUS.LOW]);
   const isFillable = s => FILLABLE.has(s);
@@ -260,6 +262,29 @@
     return w;
   }
 
+  /* "Bought": you have these tickets. It stands over whatever the last scan
+   * said (never over done) and is never stored as a scan's status, so
+   * switching it off brings that status back. */
+  function shownStatus(req, status) {
+    return req && req.bought && !req.done ? STATUS.BOUGHT : status;
+  }
+
+  /* One badge for the requests in one place (a sector, an event), done ones
+   * left out: the worst open status and its tickets; BOUGHT and the bought
+   * tickets only when every request there is bought.
+   * statusOf(r) -> the status already shown for r
+   * -> { status, qty } or null when there is no request */
+  function badgeOf(reqs, statusOf) {
+    const live = (reqs || []).filter(r => !r.done);
+    if (!live.length) return null;
+    const open = live.filter(r => !r.bought);
+    const counted = open.length ? open : live;
+    return {
+      status: open.length ? worst(open.map(statusOf)) : STATUS.BOUGHT,
+      qty: counted.reduce((n, r) => n + (Number(r.qty) || 0), 0)
+    };
+  }
+
   /* ---------------- prices -------------------------------------------
    * cats registry: { <key>: { key, label, color, price } }
    * ------------------------------------------------------------------ */
@@ -300,13 +325,16 @@
   /* ---------------- formatting ---------------------------------------
    * One line per request, used by every notification and command reply:
    *   🟢 #2 A1 65€ ×4 OK — 12 options
+   * Without a number (num null), as alerts show it:
+   *   🟢 A1 65€ ×4 OK — 12 options
    * ------------------------------------------------------------------ */
 
   function line(req, num, ev, code, tag) {
     const dot = DOT[ev.status] || DOT[STATUS.NONE];
     const qty = Math.max(1, Number(req.qty) || 1);
-    const head = `${dot} #${num} ${code}${tag ? ' ' + tag : ''} ×${qty}`;
+    const head = `${dot}${num === null || num === undefined ? '' : ` #${num}`} ${code}${tag ? ' ' + tag : ''} ×${qty}`;
     if (ev.status === STATUS.NONE) return `${head} NOT SCANNED`;
+    if (ev.status === STATUS.BOUGHT) return `${head} BOUGHT`;
     return `${head} ${ev.status} — ${ev.options} option${ev.options === 1 ? '' : 's'}`;
   }
 
@@ -331,7 +359,7 @@
   SK.rules = {
     GAP_FACTOR, STATUS, DOT, RANK, isFillable, median, cmpRow, warnTypeOf, nagAfter,
     orderByX, orderByAxis, packScan, unmappedScan,
-    blocksFor, optionsFor, evaluate, worst,
+    blocksFor, optionsFor, evaluate, worst, shownStatus, badgeOf,
     priceText, priceTag, sectorPrices,
     line, optionsPhrase, detail
   };

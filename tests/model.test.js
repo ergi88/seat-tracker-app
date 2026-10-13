@@ -172,3 +172,30 @@ test('a listing back on sale offers to reopen its done request', () => {
   const plan = listingSyncPlan(m, ME, { id: '111', tickets: 6, status: 'Sold' }, { id: '111', tickets: 6, status: 'Active' });
   assert.deepEqual(plan[0].items.map(i => [i.key, i.value]), [['done', false]]);
 });
+
+test('bought: BOUGHT over the scan, silent, after the open ones; open requests win the event', () => {
+  const m = demoMirror(NOW);
+  m.requests.r3 = Object.assign({}, m.requests.r3, { bought: true });     // SPLIT by its scan
+  const v = buildView(m, ME, { now: NOW });
+  const r3 = v.requests.find(r => r.id === 'r3');
+  assert.equal(r3.status, 'BOUGHT');
+  assert.equal(r3.tone, 'bought');
+  assert.equal(r3.muffled, true);
+  assert.equal(m.state.r3.status, 'SPLIT', 'the scan\'s own status is kept');
+  assert.ok(!v.open.some(r => r.id === 'r3') && !v.attention.some(r => r.id === 'r3'), 'no badge, no attention');
+  assert.deepEqual(v.requests.filter(r => r.eventKey === 'ebileta:2160').map(r => r.id), ['r2', 'r1', 'r3']);
+  const ev = v.events.find(e => e.key === 'ebileta:2160');
+  assert.equal(ev.worst, 'LOW', 'an open request wins over a bought one');
+  assert.equal(ev.sectors.find(s => s.id === '14').wanted, 0, 'bought tickets are not wanted');
+});
+
+test('bought: an event where every request is bought goes violet; done beats bought', () => {
+  const m = demoMirror(NOW);
+  for (const id of ['r1', 'r2', 'r3']) m.requests[id] = Object.assign({}, m.requests[id], { bought: true });
+  let ev = buildView(m, ME, { now: NOW }).events.find(e => e.key === 'ebileta:2160');
+  assert.equal(ev.worst, 'BOUGHT');
+  assert.equal(ev.tone, 'bought');
+  m.requests.r5 = Object.assign({}, m.requests.r5, { bought: true });     // done
+  const r5 = buildView(m, ME, { now: NOW }).requests.find(r => r.id === 'r5');
+  assert.notEqual(r5.status, 'BOUGHT');
+});

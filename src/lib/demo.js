@@ -207,9 +207,9 @@ export function demoMirror(now = Date.now()) {
     { id: 'pc2', userId: MATE, name: "Alex's laptop", lastSeen: now - 3 * 3600000, version: '3.0.0' }
   ];
   m.alerts = [
-    { id: 41, userId: ME, eventKey: 'ebileta:2160', requestId: 'r2', type: 'low', title: 'Running low', message: '🟠 #8 E105 ×4 LOW — 2 options\n[1] Albania – Serbia', click: '', createdAt: now - 4 * min },
-    { id: 40, userId: ME, eventKey: 'ebileta:2160', requestId: null, type: 'teamNote', title: 'Alex says', message: '[1] Albania – Serbia\nSection E106\nI dropped to $79', click: '', createdAt: now - 65 * min },
-    { id: 39, userId: ME, eventKey: 'ebileta:2160', requestId: 'r3', type: 'gone', title: 'No longer fillable', message: '🔴 #9 N101 ×2 SPLIT\n[1] Albania – Serbia', click: '', createdAt: now - 5 * 3600000 }
+    { id: 41, userId: ME, eventKey: 'ebileta:2160', requestId: 'r2', type: 'low', title: 'Running low · E105', message: 'Albania – Serbia\n🟠 E105 ×4 LOW — 2 options · Besi', click: '', createdAt: now - 4 * min },
+    { id: 40, userId: ME, eventKey: 'ebileta:2160', requestId: null, type: 'teamNote', title: 'Alex says · E106', message: 'Albania – Serbia\nI dropped to $79', click: '', createdAt: now - 65 * min },
+    { id: 39, userId: ME, eventKey: 'ebileta:2160', requestId: 'r3', type: 'gone', title: 'No longer fillable · N101', message: 'Albania – Serbia\n🔴 N101 ×2 SPLIT — 0 options', click: '', createdAt: now - 5 * 3600000 }
   ];
   m.fingerprints = { demo: '1' };
   m.pulledAt = now;

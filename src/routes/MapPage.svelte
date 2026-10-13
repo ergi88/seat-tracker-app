@@ -138,6 +138,7 @@
         <span><i class="dotl"></i>Requested + listed</span>
         <span><i class="dotl req"></i>Requested only</span>
         <span><i class="dotl list"></i>Listed only</span>
+        <span><i class="dotl held"></i>Bought</span>
       </div>
       {#if offMap.length}
         <div class="off">
@@ -201,6 +202,7 @@
   .dotl { width: 10px; height: 10px; border-radius: 50%; background: var(--map-listing); display: inline-block; }
   .dotl.req { background: var(--badge-req); }
   .dotl.list { background: var(--badge-list); }
+  .dotl.held { background: var(--s-bought); }
   .off { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
   .chip { flex: none; min-height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel); font-size: 13px; font-weight: 600; cursor: pointer; }
   .legend p { margin: 0; }

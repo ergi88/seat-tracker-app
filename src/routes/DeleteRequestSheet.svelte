@@ -38,5 +38,5 @@
 
 <style>
   .card { display: grid; gap: 3px; padding: 12px 14px; border-radius: 12px; background: var(--soft); border-left: 5px solid var(--s-none); margin-bottom: 12px; }
-  .card.ok { border-color: var(--s-ok); } .card.low { border-color: var(--s-low); } .card.bad { border-color: var(--s-bad); }
+  .card.ok { border-color: var(--s-ok); } .card.low { border-color: var(--s-low); } .card.bad { border-color: var(--s-bad); } .card.bought { border-color: var(--s-bought); }
 </style>

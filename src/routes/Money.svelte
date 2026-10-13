@@ -8,7 +8,7 @@
   import { store } from '../lib/store.svelte.js';
   import { router } from '../lib/router.svelte.js';
   import { lek, money, win, ago, fromToday } from '../lib/fmt.js';
-  import { byNearest } from '../lib/model.js';
+  import { byNearest, tone } from '../lib/model.js';
 
   let tab = $state(store.deviceSettings.moneyTab || 'listings');
   let all = $state(false);
@@ -100,7 +100,7 @@
       <div class="group">
         {#each g.items as l (l.id)}
           <button class="row" onclick={() => router.openSheet({ kind: 'listing', id: l.id })}>
-            <span class="dot {l.reqStatus ? ({ OK: 'ok', LOW: 'low', SPLIT: 'bad', SHORT: 'bad' })[l.reqStatus] || '' : ''}"></span>
+            <span class="dot {l.reqStatus ? tone(l.reqStatus) : ''}"></span>
             <span class="grow">
               <span class="title">{l.code} <span class="muted num">× {l.tickets ?? '?'}</span></span>
               <span class="sub num">{money(l.price, l.currency)} · {l.status || '—'}{l.num ? ` · #${l.num}` : ''}</span>

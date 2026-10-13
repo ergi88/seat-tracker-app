@@ -15,8 +15,9 @@ import { toRequest, toListing, toTeamPrice } from './shapes.js';
 import { settingsFor, eventUrlOf } from './model.js';
 
 const U = SK.util;
-const REQUEST_FIELDS = ['sec', 'qty', 'cats', 'client', 'listing', 'warn', 'opts', 'together', 'done', 'buyPrice', 'buyCurrency'];
-const CRITERIA = ['sec', 'qty', 'cats', 'warn', 'opts', 'together', 'done'];
+const REQUEST_FIELDS = ['sec', 'qty', 'cats', 'client', 'listing', 'warn', 'opts', 'together', 'done', 'bought', 'buyPrice', 'buyCurrency'];
+/* bought too: switching it either way starts the alerts afresh, so no old reminder carries over */
+const CRITERIA = ['sec', 'qty', 'cats', 'warn', 'opts', 'together', 'done', 'bought'];
 
 const me = () => {
   if (!store.user) throw new Error('Sign in first.');
@@ -117,7 +118,7 @@ export async function updateRequest(id, changes) {
 function fromRequest(r) {
   return {
     id: r.id, user_id: r.userId, event_key: r.eventKey, num: r.num, sec: r.sec, qty: r.qty, cats: r.cats,
-    client: r.client, listing: r.listing, warn: r.warn, opts: r.opts, together: r.together, done: r.done,
+    client: r.client, listing: r.listing, warn: r.warn, opts: r.opts, together: r.together, done: r.done, bought: r.bought,
     created_at: r.createdAt ? new Date(r.createdAt).toISOString() : null, buy_price: r.buyPrice, buy_currency: r.buyCurrency
   };
 }
@@ -176,6 +177,7 @@ export function deleteAlertsWithUndo(ids, label, all = false) {
 }
 
 export const setDone = (id, done) => updateRequest(id, { done });
+export const setBought = (id, bought) => updateRequest(id, { bought });
 
 export async function bumpQty(id, delta) {
   const r = ownRequest(id);
@@ -341,8 +343,9 @@ export async function messageTeam({ text, to, eventKey, section }) {
   const targets = (to && to.length ? to : everyone).filter(uid => uid && uid !== fromId);
   if (!targets.length) throw new Error('There is nobody else on the team to tell.');
   const ev = eventKey ? m.events[eventKey] : null;
-  const where = ev ? `[${ev.num}] ${ev.title || ev.key}` : '';
-  const message = [where, section ? `Section ${section}` : '', body].filter(Boolean).join('\n');
+  /* as the extension words it: the event's own name, the section in the title, no ids */
+  const where = ev ? SK.util.eventInfo(ev).name || ev.title || ev.key : '';
+  const message = [where, body].filter(Boolean).join('\n');
   const def = SK.settings.notifyType('teamNote');
   const click = ev ? eventUrlOf(ev) : undefined;
   const sent = [];
@@ -353,7 +356,7 @@ export async function messageTeam({ text, to, eventKey, section }) {
     if (profile.snoozeUntil > Date.now()) { sent.push({ name, skipped: 'muted' }); continue; }
     const cfg = settingsFor(m, userId, {});
     const route = cfg.notify.teamNote || {};
-    const title = `${from} says`;
+    const title = `${from} says${section ? ' · ' + section : ''}`;
     if (route.desktop) {
       await must(supa.from('alerts').insert([{
         user_id: userId, event_key: eventKey || null, request_id: null, type: 'teamNote',

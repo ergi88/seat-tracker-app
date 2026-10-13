@@ -15,7 +15,9 @@
   const TRIGGER = 88;
 
   const statusText = $derived(r.done ? 'DONE' : r.status === 'NOT SCANNED' ? 'NOT SCANNED' : r.status);
-  const freeText = $derived(r.free === null || r.free === undefined ? (r.scanNote || 'no scan yet') : `${r.free} free · ${SK.util.plural(r.options, 'option')}`);
+  const bought = $derived(!!r.bought && !r.done);
+  const freeText = $derived(bought ? 'you have these · not tracked'
+    : r.free === null || r.free === undefined ? (r.scanNote || 'no scan yet') : `${r.free} free · ${SK.util.plural(r.options, 'option')}`);
   const profit = $derived(r.profit && r.profit.total !== undefined && r.profit.total !== null ? r.profit : null);
 
   function down(e) {
@@ -58,7 +60,7 @@
 <div class="wrap">
   <div class="under left" class:hot={dx >= TRIGGER} style:opacity={dx > 0 ? 1 : 0}>{r.done ? 'Reopen' : 'Done'}</div>
   <div class="under right" class:hot={dx <= -TRIGGER} style:opacity={dx < 0 ? 1 : 0}>Delete</div>
-  <button class="card {r.done ? 'none' : r.tone}" class:dragging class:faded={r.done || r.muffled}
+  <button class="card {r.done ? 'none' : r.tone}" class:dragging class:faded={r.done || (r.muffled && !bought)}
     style:transform="translateX({dx}px)"
     onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onclick={open}>
     <div class="line1">
@@ -70,7 +72,7 @@
       <span class="pill {r.done ? 'none' : r.tone}">{statusText}</span>
     </div>
     <div class="line2">
-      <span class="muted small num">{freeText}{r.preview ? ' · preview' : ''}{r.pendingGone ? ' · checking' : ''}</span>
+      <span class="muted small num">{freeText}{!bought && r.preview ? ' · preview' : ''}{!bought && r.pendingGone ? ' · checking' : ''}</span>
       <span class="spacer"></span>
       {#if profit}
         <span class="small num profit {profit.total >= 0 ? 'ok' : 'bad'}">{SK.profit.formatLek(profit.total, true)} {SK.profit.winRateText(profit.winRate)}</span>
@@ -111,6 +113,7 @@
   .card.ok::before { background: var(--s-ok); }
   .card.low::before { background: var(--s-low); }
   .card.bad::before { background: var(--s-bad); }
+  .card.bought::before { background: var(--s-bought); }
   .card.faded { opacity: .6; }
 
   .line1, .line2, .line3 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }

@@ -68,7 +68,9 @@ export function evalOf(m, r, scans) {
   return { status: SK.rules.STATUS.NONE, options: 0, free: null, note };
 }
 
+/* bought, or its listing switched off by an older build: shown, never acted on */
 export function muffled(m, r) {
+  if (r.bought) return true;
   const l = r.listing ? m.listings[r.listing] : null;
   return !!l && l.userId === r.userId && l.track === 'off';
 }
@@ -159,20 +161,22 @@ export function byNearest(now = Date.now()) {
 }
 
 /* The extension's request order (ui/components.js sortRequests): done last,
- * then the ones a scan has judged before the ones it has not, then
- * 'options' = fewest options first (the tightest needs you first), or
- * 'number' = by request number. */
+ * bought just before them, then the ones a scan has judged before the ones
+ * it has not, then 'options' = fewest options first (the tightest needs you
+ * first), or 'number' = by request number. */
 export function requestOrder(mode) {
   const unscanned = r => (r.status === SK.rules.STATUS.NONE ? 1 : 0);
-  if (mode === 'number') return (a, b) => (a.done - b.done) || (a.num - b.num);
-  return (a, b) => (a.done - b.done) || (unscanned(a) - unscanned(b)) || ((a.options || 0) - (b.options || 0)) || (a.num - b.num);
+  const held = r => (r.bought && !r.done ? 1 : 0);
+  if (mode === 'number') return (a, b) => (a.done - b.done) || (held(a) - held(b)) || (a.num - b.num);
+  return (a, b) => (a.done - b.done) || (held(a) - held(b)) || (unscanned(a) - unscanned(b)) || ((a.options || 0) - (b.options || 0)) || (a.num - b.num);
 }
 
-/* OK / LOW / SPLIT / SHORT / NOT SCANNED -> the class the UI colours by */
+/* OK / LOW / SPLIT / SHORT / NOT SCANNED / BOUGHT -> the class the UI colours by */
 export function tone(status) {
   if (status === 'OK') return 'ok';
   if (status === 'LOW') return 'low';
   if (status === 'SPLIT' || status === 'SHORT') return 'bad';
+  if (status === 'BOUGHT') return 'bought';
   return 'none';
 }
 
@@ -198,6 +202,7 @@ function moneyOf(m, listing, buy) {
 }
 
 function listingState(l, request, event) {
+  if (request && request.bought && !request.done) return 'bought';
   if (l.track === 'off') return 'ignored';
   if (request && !request.done) return 'tracked';
   if (request) return 'done';
@@ -247,6 +252,8 @@ export function buildView(m, me, opts = {}) {
   const requests = allRequests.filter(r => r.userId === me).map(r => {
     const ev = m.events[r.eventKey];
     const e = evalOf(m, r, scans);
+    /* BOUGHT stands over the scan's status; the scan itself is kept */
+    const status = SK.rules.shownStatus(r, e.status);
     const sector = sectorOf(ev, r.sec);
     const listing = r.listing ? m.listings[r.listing] : null;
     const buy = buyOf(m, r, ev, r.sec, listing);
@@ -257,8 +264,8 @@ export function buildView(m, me, opts = {}) {
       code: codeOf(m, r),
       sectorName: sector ? sector.name : String(r.sec),
       priceTag: priceTagOf(m, r),
-      status: e.status, options: e.options, free: e.free, scanNote: e.note, preview: !!e.preview,
-      tone: tone(e.status),
+      status, options: e.options, free: e.free, scanNote: e.note, preview: !!e.preview,
+      tone: tone(status),
       scannedAt: ((m.scanMeta[r.eventKey] || {})[r.sec] || {}).at || 0,
       pendingGone: !!(m.state[r.id] || {}).pendingGone,
       muffled: muffled(m, r),
@@ -284,7 +291,8 @@ export function buildView(m, me, opts = {}) {
     const newest = metas.reduce((a, b) => (!a || b.at > a.at ? b : a), null);
     const lease = m.leases['scan:' + ev.key];
     const wanted = {};
-    for (const r of all) if (!r.done) wanted[r.sec] = (wanted[r.sec] || 0) + Number(r.qty || 0);
+    /* bought tickets are held, not wanted: they compete for no seat */
+    for (const r of all) if (!r.done && !r.bought) wanted[r.sec] = (wanted[r.sec] || 0) + Number(r.qty || 0);
     return {
       key: ev.key, num: ev.num || 0, site: ev.site, siteLabel: site ? site.label : ev.site,
       siteId: ev.siteId, title: ev.title || ev.key, date: ev.date || '', time: evTime(ev.key), url: eventUrlOf(ev),

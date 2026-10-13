@@ -9,7 +9,7 @@
   import { SK } from '../lib/sk.js';
   import { store } from '../lib/store.svelte.js';
   import { router } from '../lib/router.svelte.js';
-  import { updateRequest, setDone, setListingBuy, editListing, addRequest } from '../lib/actions.js';
+  import { updateRequest, setDone, setBought, setListingBuy, editListing, addRequest } from '../lib/actions.js';
   import { listingSyncPlan } from '../lib/model.js';
   import { ago, lek, money, day } from '../lib/fmt.js';
 
@@ -38,15 +38,21 @@
   const viagogoUrl = $derived(l ? l.url : r && r.listingUrl ? r.listingUrl : '');
   const sectorUrl = $derived(r ? r.sectorUrl : l ? l.sectorUrl : '');
   const canTrack = $derived(!!(l && !r && l.eventKey && l.sectorId));
+  /* its sector's sheet, over this one: closing it brings this deal back on the same tab */
+  const sectorId = $derived(r ? String(r.sec) : l && l.sectorId ? String(l.sectorId) : '');
+  const hasSector = $derived(!!(ev && sectorId && ev.sectors.some(s => s.id === sectorId)));
+  const openSector = () => router.swapSheet({ kind: 'sector', eventKey: ev.key, sectorId }, { tab });
 
   let tab = $state(firstTab || (requestId ? 'seats' : 'listing'));
   let busy = $state(false);
   const tone = $derived(r ? (r.done ? 'none' : r.tone) : 'none');
+  /* bought: you have the tickets. It stands over the scan, so the scan's numbers and knobs wait */
+  const bought = $derived(!!(r && r.bought && !r.done));
   const winText = x => win(x).replace(/[()]/g, '');
   function win(x) { return P.winRateText(x); }
 
   /* ---------------- leaving the sheet ---------------- */
-  function then(open) { router.closeSheet(); setTimeout(open, 350); }
+  function then(open) { router.closeSheet({ all: true }); setTimeout(open, 350); }
   const tell = to => then(() => router.openSheet({ kind: 'message', eventKey: ev ? ev.key : null, section: code, to }));
   const del = () => then(() => router.openSheet({ kind: 'deleteRequest', id: r.id }));
   const delListing = () => then(() => router.openSheet({ kind: 'deleteListing', id: l.id }));
@@ -66,6 +72,7 @@
     const ok = await act(() => setDone(r.id, !was));
     if (ok !== undefined) { router.closeSheet(); store.toast(was ? `#${r.num} reopened` : `#${r.num} done`); }
   }
+  const toggleBought = on => act(() => setBought(r.id, on), on ? `#${r.num} bought` : `Tracking #${r.num} again`);
   const track = () => act(
     () => addRequest({ eventKey: l.eventKey, sec: l.sectorId, qty: Math.max(1, Number(l.tickets) || 1), listing: l.id }),
     req => `Tracking ${code} as #${req.num}`
@@ -141,7 +148,7 @@
 </script>
 
 {#if r || l}
-  <Sheet label={`${r ? '#' + r.num + ' ' : ''}${code}`}>
+  <Sheet label={`${r ? '#' + r.num + ' ' : ''}${code}`} fixed>
     {#snippet head()}
       <div class="hd">
         <div class="id">
@@ -149,6 +156,7 @@
           <span class="code">{code}</span>
           <span class="qty num">×{r ? r.qty : count}</span>
           {#if r && r.done}<span class="pill none">DONE</span>{/if}
+          {#if hasSector}<button class="to-sector" onclick={openSector}><Icon name="map" size={16} />Sector</button>{/if}
         </div>
         <div class="muted small ev">
           {ev ? `[${ev.num}] ${ev.info.name}` : (l && l.title) || ''}{ev && ev.time !== null ? ' · ' + day(ev.time) : l && l.when ? ' · ' + l.when : ''}{r && r.client ? ' · ' + r.client : ''}
@@ -167,7 +175,7 @@
           <div class="cell seat {tone}">
             <span class="k">Seats</span>
             <b class="big {tone}">{r.done ? 'DONE' : r.status}</b>
-            <span class="s num">{r.free ?? '—'} free · {r.options} opt.</span>
+            <span class="s num">{bought ? 'not tracked' : `${r.free ?? '—'} free · ${r.options} opt.`}</span>
           </div>
         {:else}
           <button class="cell add" onclick={() => (tab = 'seats')}>
@@ -209,16 +217,27 @@
       {#if r}
         <div class="status {tone}">
           <span class="pill {tone}">{r.done ? 'DONE' : r.status}</span>
-          <span class="num strong">{r.free ?? '—'} free · {SK.util.plural(r.options, 'option')}</span>
-          <span class="muted small">{r.sectorName}{r.priceTag ? ' · ' + r.priceTag : ''} · {r.scannedAt ? `scanned ${ago(r.scannedAt)}` : 'not scanned yet'}{r.preview ? ' · preview' : ''}</span>
-          {#if r.scanNote}<span class="muted small">{r.scanNote}</span>{/if}
-          {#if r.muffled}<span class="muted small">Its listing is switched off: no scans, no alerts.</span>{/if}
+          {#if bought}
+            <span class="strong">You have these tickets</span>
+            <span class="muted small">{r.sectorName}{r.priceTag ? ' · ' + r.priceTag : ''} · no scans, no alerts</span>
+          {:else}
+            <span class="num strong">{r.free ?? '—'} free · {SK.util.plural(r.options, 'option')}</span>
+            <span class="muted small">{r.sectorName}{r.priceTag ? ' · ' + r.priceTag : ''} · {r.scannedAt ? `scanned ${ago(r.scannedAt)}` : 'not scanned yet'}{r.preview ? ' · preview' : ''}</span>
+            {#if r.scanNote}<span class="muted small">{r.scanNote}</span>{/if}
+            {#if r.muffled}<span class="muted small">Its listing is switched off: no scans, no alerts.</span>{/if}
+          {/if}
         </div>
         <div class="box">
+          {#if !r.done}
+            <label class="line"><span>Bought</span><input class="switch" type="checkbox" role="switch" checked={r.bought} disabled={busy} onchange={e => toggleBought(e.currentTarget.checked)} /></label>
+          {/if}
           <div class="line"><span>Tickets wanted</span><Stepper value={r.qty} onchange={n => act(() => updateRequest(r.id, { qty: n }))} /></div>
-          <label class="line"><span>Side by side</span><input type="checkbox" checked={r.together} onchange={e => act(() => updateRequest(r.id, { together: e.currentTarget.checked }))} /></label>
-          <label class="line"><span>Block warn</span><input class="input mini num" type="number" inputmode="numeric" value={r.warn} onchange={e => field('warn', e.currentTarget.value)} /></label>
-          <label class="line"><span>Options warn</span><input class="input mini num" type="number" inputmode="numeric" value={r.opts} onchange={e => field('opts', e.currentTarget.value)} /></label>
+          <!-- a bought request never warns: these wait, kept, until it is tracked again -->
+          {#if !bought}
+            <label class="line"><span>Side by side</span><input type="checkbox" checked={r.together} onchange={e => act(() => updateRequest(r.id, { together: e.currentTarget.checked }))} /></label>
+            <label class="line"><span>Block warn</span><input class="input mini num" type="number" inputmode="numeric" value={r.warn} onchange={e => field('warn', e.currentTarget.value)} /></label>
+            <label class="line"><span>Options warn</span><input class="input mini num" type="number" inputmode="numeric" value={r.opts} onchange={e => field('opts', e.currentTarget.value)} /></label>
+          {/if}
         </div>
       {:else}
         <div class="empty-card">
@@ -375,26 +394,33 @@
     {/if}
 
     {#snippet footer()}
-      {#if tab === 'listing' && l && step === 'confirm'}
-        <button class="btn" disabled={busy} onclick={() => (step = 'edit')}>Back</button>
-        <button class="btn primary block" disabled={busy} onclick={saveListing}>{busy ? 'Saving…' : 'Confirm and save'}</button>
-      {:else if tab === 'listing' && l && step === 'sync'}
-        <button class="btn" disabled={busy} onclick={() => { step = 'edit'; store.toast('Request left as it was'); }}>Skip</button>
-        <button class="btn primary block" disabled={busy || !plan.some(p => p.items.some(i => i.on))} onclick={syncRequests}>{busy ? 'Updating…' : 'Update request'}</button>
-      {:else if tab === 'listing' && l}
-        <button class="btn danger" onclick={delListing} aria-label="Delete listing"><Icon name="trash" size={18} /></button>
-        <button class="btn primary block" disabled={!priceOk || !diffs.length} onclick={() => (step = 'confirm')}>{diffs.length ? 'Save listing…' : 'Change price, tickets or status'}</button>
-      {:else if tab === 'listing' && r && !r.listing}
-        <button class="btn primary block" disabled={busy || !linkInput.trim()} onclick={linkListing}>Link listing</button>
-      {:else if r}
-        <button class="btn danger" onclick={del} aria-label="Delete request"><Icon name="trash" size={18} /></button>
-        <button class="btn {r.done ? '' : 'good'} block" disabled={busy} onclick={toggleDone}><Icon name="check" size={18} /> {r.done ? 'Reopen' : 'Mark done'}</button>
-      {:else if canTrack}
-        <button class="btn primary block" disabled={busy} onclick={track}>Track {code} ×{Math.max(1, Number(l.tickets) || 1)}</button>
-      {/if}
+      {@render actions()}
+      <!-- always last, at the right edge: the same size as the delete button -->
+      <button class="btn close" onclick={() => router.closeSheet()} aria-label="Close"><Icon name="down" size={18} /></button>
     {/snippet}
   </Sheet>
 {/if}
+
+<!-- what the footer offers on each tab; the close button follows it -->
+{#snippet actions()}
+  {#if tab === 'listing' && l && step === 'confirm'}
+    <button class="btn" disabled={busy} onclick={() => (step = 'edit')}>Back</button>
+    <button class="btn primary block" disabled={busy} onclick={saveListing}>{busy ? 'Saving…' : 'Confirm and save'}</button>
+  {:else if tab === 'listing' && l && step === 'sync'}
+    <button class="btn" disabled={busy} onclick={() => { step = 'edit'; store.toast('Request left as it was'); }}>Skip</button>
+    <button class="btn primary block" disabled={busy || !plan.some(p => p.items.some(i => i.on))} onclick={syncRequests}>{busy ? 'Updating…' : 'Update request'}</button>
+  {:else if tab === 'listing' && l}
+    <button class="btn danger" onclick={delListing} aria-label="Delete listing"><Icon name="trash" size={18} /></button>
+    <button class="btn primary block" disabled={!priceOk || !diffs.length} onclick={() => (step = 'confirm')}>{diffs.length ? 'Save listing…' : 'Change price, tickets or status'}</button>
+  {:else if tab === 'listing' && r && !r.listing}
+    <button class="btn primary block" disabled={busy || !linkInput.trim()} onclick={linkListing}>Link listing</button>
+  {:else if r}
+    <button class="btn danger" onclick={del} aria-label="Delete request"><Icon name="trash" size={18} /></button>
+    <button class="btn {r.done ? '' : 'good'} block" disabled={busy} onclick={toggleDone}><Icon name="check" size={18} /> {r.done ? 'Reopen' : 'Mark done'}</button>
+  {:else if canTrack}
+    <button class="btn primary block" disabled={busy} onclick={track}>Track {code} ×{Math.max(1, Number(l.tickets) || 1)}</button>
+  {/if}
+{/snippet}
 
 <style>
   .hd { display: grid; gap: 2px; }
@@ -403,6 +429,12 @@
   .code { font-size: 24px; font-weight: 750; letter-spacing: -.02em; }
   .qty { font-size: 17px; font-weight: 600; }
   .id .pill { align-self: center; }
+  .to-sector {
+    align-self: center; margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+    min-height: 36px; padding: 0 12px; border: 0; border-radius: 99px; cursor: pointer;
+    background: var(--accent-soft); color: var(--accent); font: inherit; font-size: 14px; font-weight: 650;
+  }
+  .to-sector:active { filter: brightness(.95); transform: scale(.97); }
   .ev { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .links { display: flex; gap: 6px; margin-top: 10px; }
@@ -427,7 +459,8 @@
   .cell.seat.ok { box-shadow: inset 4px 0 0 var(--s-ok); }
   .cell.seat.low { box-shadow: inset 4px 0 0 var(--s-low); }
   .cell.seat.bad { box-shadow: inset 4px 0 0 var(--s-bad); }
-  .big.ok { color: var(--ok); } .big.low { color: var(--low); } .big.bad { color: var(--bad); } .big.none { color: var(--muted); }
+  .cell.seat.bought { box-shadow: inset 4px 0 0 var(--s-bought); }
+  .big.ok { color: var(--ok); } .big.low { color: var(--low); } .big.bad { color: var(--bad); } .big.none { color: var(--muted); } .big.bought { color: var(--bought); }
 
   .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 10px; padding: 3px; border-radius: 11px; background: var(--softer); }
   .tabs button { min-height: 36px; border: 0; border-radius: 9px; background: none; font: inherit; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; transition: background .2s, color .2s; }
@@ -439,6 +472,19 @@
   .line { display: flex; align-items: center; justify-content: space-between; min-height: 52px; gap: 12px; }
   .line + .line { border-top: 1px solid var(--line); }
   .line input[type=checkbox] { width: 24px; height: 24px; accent-color: var(--accent); }
+  /* the Bought switch: a track and a knob, violet when on */
+  .line input.switch {
+    appearance: none; -webkit-appearance: none; position: relative; flex: none; margin: 0;
+    width: 50px; height: 30px; border-radius: 99px; background: var(--s-none); cursor: pointer; transition: background .2s;
+  }
+  .line input.switch::after {
+    content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px var(--shadow); transition: transform .2s;
+  }
+  .line input.switch:checked { background: var(--s-bought); }
+  .line input.switch:checked::after { transform: translateX(20px); }
+  .line input.switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .line input.switch:disabled { opacity: .6; }
   .input.mini { width: 84px; min-height: 40px; padding: 6px 10px; text-align: right; }
   .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
   .kv span { color: var(--muted); }
@@ -500,6 +546,9 @@
   .targets button.on { background: var(--accent-soft); }
   .targets .w { color: var(--accent); font-weight: 750; }
   .targets span.ok { font-weight: 600; }
+
+  /* at the right edge even when the tab offers nothing else */
+  .close { flex: none; margin-left: auto; }
 
   .fields { display: grid; gap: 12px; }
   .fields:empty { display: none; }

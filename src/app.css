@@ -20,6 +20,7 @@
   --bad: #b3261e;  --badbg: #fceceb;
   --none: #6b7280; --nonebg: #eef0f3;
   --s-ok: #1a9e57; --s-low: #e08a25; --s-bad: #d93b30; --s-none: #c7ccd4;
+  --bought: #6d28d9; --boughtbg: #f1ebfd; --s-bought: #7c3aed;
   --shadow: rgba(16, 24, 40, .12);
   --bar: rgba(255, 255, 255, .82);
   --scrim: rgba(10, 12, 16, .38);
@@ -53,6 +54,7 @@
     --ok: #4ad4a0; --okbg: #12302a; --low: #f0a758; --lowbg: #33261a;
     --bad: #f2837c; --badbg: #38201f; --none: #98a1b0; --nonebg: #262a33;
     --s-ok: #3cc28a; --s-low: #f0a758; --s-bad: #f06a62; --s-none: #4a515e;
+    --bought: #c4b5fd; --boughtbg: #2a2140; --s-bought: #a78bfa;
     --shadow: rgba(0, 0, 0, .5);
     --bar: rgba(22, 24, 30, .82);
     --scrim: rgba(0, 0, 0, .55);
@@ -73,6 +75,7 @@
   --ok: #4ad4a0; --okbg: #12302a; --low: #f0a758; --lowbg: #33261a;
   --bad: #f2837c; --badbg: #38201f; --none: #98a1b0; --nonebg: #262a33;
   --s-ok: #3cc28a; --s-low: #f0a758; --s-bad: #f06a62; --s-none: #4a515e;
+  --bought: #c4b5fd; --boughtbg: #2a2140; --s-bought: #a78bfa;
   --shadow: rgba(0, 0, 0, .5);
   --bar: rgba(22, 24, 30, .82);
   --scrim: rgba(0, 0, 0, .55);
@@ -113,7 +116,7 @@ a { color: var(--accent); text-decoration: none; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
 .tiny { font-size: 12px; }
-.ok { color: var(--ok); } .low { color: var(--low); } .bad { color: var(--bad); } .none { color: var(--none); }
+.ok { color: var(--ok); } .low { color: var(--low); } .bad { color: var(--bad); } .none { color: var(--none); } .bought { color: var(--bought); }
 
 /* ---------------- controls ------------------------------------------ */
 
@@ -180,10 +183,11 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .pill.low { background: var(--lowbg); color: var(--low); }
 .pill.bad { background: var(--badbg); color: var(--bad); }
 .pill.none { background: var(--nonebg); color: var(--none); }
+.pill.bought { background: var(--boughtbg); color: var(--bought); }
 .pill.accent { background: var(--accent-soft); color: var(--accent); }
 
 .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--s-none); }
-.dot.ok { background: var(--s-ok); } .dot.low { background: var(--s-low); } .dot.bad { background: var(--s-bad); }
+.dot.ok { background: var(--s-ok); } .dot.low { background: var(--s-low); } .dot.bad { background: var(--s-bad); } .dot.bought { background: var(--s-bought); }
 
 .banner {
   display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--r-card);
