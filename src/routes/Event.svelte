@@ -5,6 +5,7 @@
   import Banners from '../ui/Banners.svelte';
   import StadiumMap from '../ui/StadiumMap.svelte';
   import DateTile from '../ui/DateTile.svelte';
+  import BuysCard from '../ui/BuysCard.svelte';
   import { venueFor } from '../lib/venues.js';
   import { SK } from '../lib/sk.js';
   import { store } from '../lib/store.svelte.js';
@@ -22,25 +23,32 @@
   const open = $derived(mine.filter(r => !r.done));
   const done = $derived(mine.filter(r => r.done));
 
-  /* the requests: filtered by status, and folded away if you like (remembered per event) */
+  /* the requests: filtered by status */
   const TONES = [
     { key: 'bad', label: 'Short' }, { key: 'low', label: 'Low' },
     { key: 'ok', label: 'OK' }, { key: 'none', label: 'Not scanned' }, { key: 'bought', label: 'Bought' }
   ];
-  const FOLD_KEY = 'sk.foldedRequests';
-  const readFolded = () => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '[]'); } catch (e) { return []; } };
-  let folded = $state(readFolded().includes(key));
   let only = $state('all');
   const tally = $derived(Object.fromEntries(TONES.map(t => [t.key, open.filter(r => r.tone === t.key).length])));
   const present = $derived(TONES.filter(t => tally[t.key]));
   const shown = $derived(only === 'all' ? open : open.filter(r => r.tone === only));
-  function fold() {
-    folded = !folded;
-    try {
-      const keys = new Set(readFolded());
-      if (folded) keys.add(key); else keys.delete(key);
-      localStorage.setItem(FOLD_KEY, JSON.stringify([...keys]));
-    } catch (e) { /* remembered for this visit only */ }
+
+  /* ---------------- tabs under the map ----------------
+   * Requests, Buy and Sectors one at a time instead of one long page. The
+   * strip sticks under the top bar; switching tabs while it is stuck brings
+   * the new tab in from its top. The last tab is remembered on this phone. */
+  const TAB_KEY = 'sk.eventTab';
+  let tab = $state((() => { try { return localStorage.getItem(TAB_KEY) || 'requests'; } catch (e) { return 'requests'; } })());
+  let strip = $state();
+  let anchor = $state();
+  function pick(k) {
+    if (k === tab) return;
+    const sc = strip && strip.closest('.scroll');
+    const stuckAt = strip ? parseFloat(getComputedStyle(strip).top) + (sc ? sc.getBoundingClientRect().top : 0) : 0;
+    const stuck = !!strip && strip.getBoundingClientRect().top <= stuckAt + 1;
+    tab = k;
+    try { localStorage.setItem(TAB_KEY, k); } catch (e) { /* this visit only */ }
+    if (stuck && sc && anchor) requestAnimationFrame(() => { sc.scrollTop += anchor.getBoundingClientRect().top - stuckAt; });
   }
   /* a filter whose last request went away falls back to all */
   $effect(() => { if (only !== 'all' && !tally[only]) only = 'all'; });
@@ -113,18 +121,14 @@
       <div class="banner bad"><span><b>Scans failing since {clock(ev.health.firstFailAt)}</b>{ev.health.lastError || ''}</span></div>
     {/if}
 
-    <h2 class="section-title fold-head">
-      <button class="fold" onclick={fold} aria-expanded={!folded}>
-        <span class="caret" class:shut={folded}><Icon name="chev" size={16} /></span>
-        Your requests · {open.length}
-      </button>
-      {#if folded}
-        <span class="mini-tally">
-          {#each present as t (t.key)}<span class="pill {t.key} num">{tally[t.key]}</span>{/each}
-        </span>
-      {/if}
-    </h2>
-    {#if !folded}
+    <div class="tab-anchor" bind:this={anchor}></div>
+    <div class="tabs" bind:this={strip} role="tablist" aria-label="Event sections">
+      {#each [['requests', 'Requests', open.length], ['buy', 'Buy', ev.buys.total], ['sectors', 'Sectors', ev.sectors.length]] as [k, label, n] (k)}
+        <button role="tab" aria-selected={tab === k} class:on={tab === k} onclick={() => pick(k)}>{label}{#if n}<span class="num">{n}</span>{/if}</button>
+      {/each}
+    </div>
+
+    {#if tab === 'requests'}
       {#if present.length > 1}
         <div class="filters" role="group" aria-label="Show requests by status">
           <button class:on={only === 'all'} onclick={() => (only = 'all')}>All <span class="num">{open.length}</span></button>
@@ -139,38 +143,49 @@
       {#if !open.length}
         <a class="add-card" href={href.add(key)}><Icon name="plus" size={20} /> Add a request</a>
       {/if}
-    {/if}
-    {#if ev.teamOpen > ev.open}
-      <p class="muted small">Teammates have {plural(ev.teamOpen - ev.open, 'open request')} here too ({ev.otherOwners.join(', ')}).</p>
-    {/if}
+      {#if ev.teamOpen > ev.open}
+        <p class="muted small">Teammates have {plural(ev.teamOpen - ev.open, 'open request')} here too ({ev.otherOwners.join(', ')}).</p>
+      {/if}
+      {#if done.length}
+        <h2 class="section-title">Done · {done.length}</h2>
+        {#each done as r (r.id)}<RequestCard {r} />{/each}
+      {/if}
+    {:else if tab === 'buy'}
+      <BuysCard {ev} />
 
-    <h2 class="section-title">Sectors</h2>
-    <input class="input" type="search" placeholder="Find a sector (E106, tribuna…)" bind:value={q} enterkeyhint="search" />
-    <div class="group sectors">
-      {#each sectors as s (s.id)}
-        <button class="row" onclick={() => router.openSheet({ kind: 'sector', eventKey: key, sectorId: s.id })}>
-          <span class="code">{s.code}</span>
-          <span class="grow">
-            <span class="sub">{s.name !== s.code ? s.name : ''}</span>
-          </span>
-          {#if s.wanted}<span class="pill accent num">{s.wanted} wanted</span>{/if}
-          <span class="free num {s.summary ? (s.summary.available ? 'ok' : 'muted') : 'muted'}">
-            {s.summary ? (s.summary.unmapped ? 'no map' : `${s.summary.available} free`) : '—'}
-          </span>
+      <!-- what a ticket costs in each sector: Add purchase fills its price from here -->
+      <div class="group prices">
+        <button class="row" onclick={() => router.openSheet({ kind: 'prices', eventKey: key })}>
+          <span class="grow"><span class="title">Price list</span>
+            <span class="sub">{ev.sectors.filter(s => s.price).length} of {ev.sectors.length} sectors priced</span></span>
+          <Icon name="chev" size={18} />
         </button>
-      {:else}
-        <div class="row muted small">{q ? 'No sector matches.' : 'No sector with free seats in the last scans.'}</div>
-      {/each}
-    </div>
-    {#if !q}
-      <button class="btn small linkish" onclick={() => (showAllSectors = !showAllSectors)}>
-        {showAllSectors ? 'Only sectors with seats' : `Show all ${ev.sectors.length} sectors`}
-      </button>
-    {/if}
-
-    {#if done.length}
-      <h2 class="section-title">Done · {done.length}</h2>
-      {#each done as r (r.id)}<RequestCard {r} />{/each}
+      </div>
+    {:else}
+      <div class="sectors-tab">
+        <input class="input" type="search" placeholder="Find a sector (E106, tribuna…)" bind:value={q} enterkeyhint="search" />
+        <div class="group sectors">
+          {#each sectors as s (s.id)}
+            <button class="row" onclick={() => router.openSheet({ kind: 'sector', eventKey: key, sectorId: s.id })}>
+              <span class="code">{s.code}</span>
+              <span class="grow">
+                <span class="sub">{s.name !== s.code ? s.name : ''}</span>
+              </span>
+              {#if s.wanted}<span class="pill accent num">{s.wanted} wanted</span>{/if}
+              <span class="free num {s.summary ? (s.summary.available ? 'ok' : 'muted') : 'muted'}">
+                {s.summary ? (s.summary.unmapped ? 'no map' : `${s.summary.available} free`) : '—'}
+              </span>
+            </button>
+          {:else}
+            <div class="row muted small">{q ? 'No sector matches.' : 'No sector with free seats in the last scans.'}</div>
+          {/each}
+        </div>
+        {#if !q}
+          <button class="btn small linkish" onclick={() => (showAllSectors = !showAllSectors)}>
+            {showAllSectors ? 'Only sectors with seats' : `Show all ${ev.sectors.length} sectors`}
+          </button>
+        {/if}
+      </div>
     {/if}
 
     <button class="btn block archive" onclick={archive}><Icon name="archive" size={18} /> {ev.archived ? 'Unarchive' : 'Archive for me'}</button>
@@ -200,14 +215,24 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
   .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 99px; background: var(--panel); font-size: 13px; color: var(--muted); box-shadow: 0 1px 0 var(--line); }
   .chip.accent { background: var(--accent-soft); color: var(--accent); }
-  .fold-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .fold {
-    display: inline-flex; align-items: center; gap: 4px; margin-left: -4px; padding: 4px 4px 4px 0;
-    border: 0; background: none; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
+  /* the tabs under the map: stuck under the top bar while the page scrolls */
+  .tabs {
+    position: sticky; top: calc(48px + var(--safe-t)); z-index: 4;
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px;
+    margin: 16px calc(-16px - var(--safe-r)) 12px calc(-16px - var(--safe-l));
+    padding: 8px calc(16px + var(--safe-r)) 8px calc(16px + var(--safe-l));
+    background: var(--bar); border-bottom: 1px solid var(--line);
+    -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
   }
-  .caret { display: inline-flex; transform: rotate(90deg); transition: transform .2s var(--ease); }
-  .caret.shut { transform: none; }
-  .mini-tally { display: flex; gap: 4px; text-transform: none; letter-spacing: 0; }
+  .tabs button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px;
+    border: 0; border-radius: 10px; background: var(--softer); color: var(--muted);
+    font: inherit; font-size: 15px; font-weight: 650; cursor: pointer; transition: background .2s, color .2s;
+  }
+  .tabs button .num { font-size: 12.5px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: var(--panel); color: var(--muted); }
+  .tabs button.on { background: var(--ink); color: var(--bg); }
+  .tabs button.on .num { background: var(--bg); color: var(--ink); }
+  .sectors-tab { display: grid; }
   .filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 0 10px; padding-bottom: 2px; }
   .filters::-webkit-scrollbar { display: none; }
   .filters button {
@@ -225,6 +250,8 @@
   .filters button.bought.on { background: var(--boughtbg); color: var(--bought); box-shadow: inset 0 0 0 1.5px var(--bought); }
   .add-card { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px; border-radius: var(--r-card); border: 1.5px dashed var(--line); color: var(--accent); font-weight: 600; }
   .sectors { margin-top: 10px; }
+  .prices { margin-top: 10px; }
+  .prices .title, .prices .sub { display: block; }
   .code { font-weight: 700; min-width: 64px; }
   .free { font-weight: 600; font-size: 14px; }
   .linkish { margin-top: 10px; background: none; color: var(--accent); padding: 0; }

@@ -59,6 +59,9 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="scroll" bind:this={scroller} onscroll={onScroll}
     ontouchstart={onTouchStart} ontouchmove={onTouchMove} ontouchend={onTouchEnd} ontouchcancel={onTouchEnd}>
+    <!-- room under the bar, as an element rather than padding: browsers differ on whether
+         padding counts for something sticky inside, and this way it never does -->
+    <div class="under-bar" aria-hidden="true"></div>
     {#if refresh}
       <div class="ptr" style:height="{pull}px" class:spinning>
         <span style:transform="rotate({pull * 4}deg)" style:opacity={Math.min(1, pull / THRESHOLD)}><Icon name="refresh" size={20} /></span>
@@ -101,9 +104,9 @@
 
   .scroll {
     flex: 1; overflow-y: auto; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch;
-    padding-top: calc(48px + var(--safe-t));
     padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 24px);
   }
+  .under-bar { height: calc(48px + var(--safe-t)); flex: none; }
   .large, .content {
     max-width: 680px; margin: 0 auto;
     padding-left: calc(16px + var(--safe-l)); padding-right: calc(16px + var(--safe-r));

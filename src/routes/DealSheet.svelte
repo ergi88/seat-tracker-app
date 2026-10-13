@@ -42,6 +42,10 @@
   const sectorId = $derived(r ? String(r.sec) : l && l.sectorId ? String(l.sectorId) : '');
   const hasSector = $derived(!!(ev && sectorId && ev.sectors.some(s => s.id === sectorId)));
   const openSector = () => router.swapSheet({ kind: 'sector', eventKey: ev.key, sectorId }, { tab });
+  /* what was bought for this request, by which account; a purchase opens over this sheet */
+  const buys = $derived(r && v ? v.purchases.filter(p => p.requestId === r.id).map(p => ({ p, a: v.accounts.find(a => a.id === p.accountId) })) : []);
+  const addPurchase = () => router.swapSheet({ kind: 'purchase', eventKey: r.eventKey, requestId: r.id }, { tab });
+  const openPurchase = id => router.swapSheet({ kind: 'purchase', id }, { tab });
 
   let tab = $state(firstTab || (requestId ? 'seats' : 'listing'));
   let busy = $state(false);
@@ -238,6 +242,17 @@
             <label class="line"><span>Block warn</span><input class="input mini num" type="number" inputmode="numeric" value={r.warn} onchange={e => field('warn', e.currentTarget.value)} /></label>
             <label class="line"><span>Options warn</span><input class="input mini num" type="number" inputmode="numeric" value={r.opts} onchange={e => field('opts', e.currentTarget.value)} /></label>
           {/if}
+        </div>
+
+        <h3 class="section-title">Purchases{r.purchased ? ` · ${r.purchased} of ${r.qty}` : ''}</h3>
+        <div class="box">
+          {#each buys as { p, a } (p.id)}
+            <button class="line buy" onclick={() => openPurchase(p.id)}>
+              <span class="who">{a ? a.email : 'deleted account'}</span>
+              <b class="num">×{p.qty}</b><Icon name="chev" size={16} />
+            </button>
+          {/each}
+          <button class="line add-buy" onclick={addPurchase}><Icon name="plus" size={18} /> {buys.length ? 'Add another purchase' : 'Add purchase'}</button>
         </div>
       {:else}
         <div class="empty-card">
@@ -549,6 +564,10 @@
 
   /* at the right edge even when the tab offers nothing else */
   .close { flex: none; margin-left: auto; }
+
+  .buy, .add-buy { width: 100%; border: 0; background: none; font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
+  .buy .who { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .add-buy { justify-content: flex-start; gap: 8px; color: var(--accent); font-weight: 650; }
 
   .fields { display: grid; gap: 12px; }
   .fields:empty { display: none; }

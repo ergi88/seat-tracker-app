@@ -200,7 +200,7 @@
     /* sweep: worth scanning every sector now and then. eBileta holds stands
      * back and releases them near the date, and each sector is one request. */
     can: { prices: false, listEvents: true, hold: true, sweep: true },
-    pages: [{ key: 'sectors', label: 'sector list page' }, { key: 'seats', label: 'seat page' }, { key: 'events', label: 'event list page' }],
+    pages: [{ key: 'sectors', label: 'sector list page' }, { key: 'seats', label: 'seat page' }, { key: 'events', label: 'event list page' }, { key: 'checkout', label: 'checkout page drawer' }],
     badges: 'badges on sectors and the stadium map',
     sectorMaxAgeMs: 60 * 1000,
 

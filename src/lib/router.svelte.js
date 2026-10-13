@@ -5,7 +5,7 @@
  *   #/event/<key> one event    #/add?event=<key> add a request
  *   #/map/<key>   the stadium  #/add?event=<key>&sec=<code> prefilled
  *   #/money       Money        #/inbox          Inbox
- *   #/settings    Settings
+ *   #/settings    Settings     #/accounts       your buying accounts
  *
  * Changing route runs inside a view transition, sliding forward into a
  * detail page and back out of it, cross-fading between tabs. Sheets put
@@ -19,7 +19,7 @@
 import { flushSync } from 'svelte';
 
 export const TABS = ['now', 'events', 'money', 'inbox'];
-const DEPTH = { now: 0, events: 0, money: 0, inbox: 0, settings: 1, event: 1, add: 2, map: 2 };
+const DEPTH = { now: 0, events: 0, money: 0, inbox: 0, settings: 1, event: 1, add: 2, map: 2, accounts: 2 };
 
 /* the same sheet, whatever tab it was on */
 const sameSheet = (a, b) => !!a && !!b && a.kind === b.kind && (a.id ?? null) === (b.id ?? null) &&
@@ -121,5 +121,6 @@ export const router = new Router();
 export const href = {
   event: key => '#/event/' + encodeURIComponent(key),
   add: key => '#/add' + (key ? '?event=' + encodeURIComponent(key) : ''),
-  map: key => '#/map/' + encodeURIComponent(key)
+  map: key => '#/map/' + encodeURIComponent(key),
+  accounts: () => '#/accounts'
 };

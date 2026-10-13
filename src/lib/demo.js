@@ -108,7 +108,7 @@ export function demoMirror(now = Date.now()) {
   const min = 60000;
   const day = new Date(now).toISOString().slice(0, 10);
   const m = emptyMirror();
-  m.team = { autoMin: 5 };
+  m.team = { autoMin: 5, buyLimits: { ebileta: 4 } };
   m.profiles = {
     [ME]: { displayName: 'Sam', settings: { phoneTopic: 'demo-topic' }, snoozeUntil: 0 },
     [MATE]: { displayName: 'Alex', settings: {}, snoozeUntil: 0 }
@@ -211,6 +211,21 @@ export function demoMirror(now = Date.now()) {
     { id: 40, userId: ME, eventKey: 'ebileta:2160', requestId: null, type: 'teamNote', title: 'Alex says · E106', message: 'Albania – Serbia\nI dropped to $79', click: '', createdAt: now - 65 * min },
     { id: 39, userId: ME, eventKey: 'ebileta:2160', requestId: 'r3', type: 'gone', title: 'No longer fillable · N101', message: 'Albania – Serbia\n🔴 N101 ×2 SPLIT — 0 options', click: '', createdAt: now - 5 * 3600000 }
   ];
+  /* buy tracker: three accounts of mine, a teammate's that I never see */
+  const acc = (id, userId, email, first, last) => ({ id, userId, email, firstName: first, lastName: last, birthday: '', notes: '', createdAt: now });
+  m.accounts = {
+    a1: acc('a1', ME, 'ergi.tickets1@gmail.com', 'Ergi', 'Asllani'),
+    a2: acc('a2', ME, 'ergi.tickets2@gmail.com', '', ''),
+    a3: acc('a3', ME, 'mum.account@gmail.com', 'Drita', 'Asllani'),
+    a9: acc('a9', MATE, 'alex@example.com', 'Alex', '')
+  };
+  const buy = (id, accountId, qty, extra) => ({ id, userId: ME, accountId, eventKey: 'ebileta:2160', requestId: null, sectorId: '12', qty,
+    price: 4000, currency: 'ALL', boughtOn: new Date(now).toISOString().slice(0, 10), orderRef: '', notes: '', createdAt: now, ...extra });
+  m.purchases = {
+    p1: buy('p1', 'a1', 4, { requestId: 'r1', orderRef: 'EB-88213' }),
+    p2: buy('p2', 'a2', 2, { requestId: 'r1' }),
+    p9: Object.assign(buy('p9', 'a9', 3), { userId: MATE })
+  };
   m.fingerprints = { demo: '1' };
   m.pulledAt = now;
   return m;

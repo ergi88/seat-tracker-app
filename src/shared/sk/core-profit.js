@@ -101,8 +101,9 @@
   /* ---------------- buy price --------------------------------------- */
 
   /* Where a request's ticket price comes from, most specific first:
-   * a price typed on the request, Posttick's price categories, eFinity's
-   * sector price, the price range a scan read (eBileta). */
+   * a price typed on the request, the event's price list (x.priceList, a
+   * price the team typed for the sector), Posttick's price categories,
+   * eFinity's sector price, the price range a scan read (eBileta). */
   function buyPriceOf(x) {
     const r = x.request || {};
     const l = x.listing || {};
@@ -111,6 +112,8 @@
      * you meant when you typed it there. */
     if (Number(l.buyPrice) > 0) return { amount: Number(l.buyPrice), currency: l.buyCurrency || BASE, source: 'typed on the listing' };
     if (Number(r.buyPrice) > 0) return { amount: Number(r.buyPrice), currency: r.buyCurrency || BASE, source: 'typed' };
+    const pl = x.priceList;
+    if (pl && Number(pl.amount) > 0) return { amount: Number(pl.amount), currency: pl.currency || BASE, source: 'price list' };
     const s = x.summary || {};
     if (x.site === 'posttick' && x.event) {
       const picked = (r.cats || []).map(String);

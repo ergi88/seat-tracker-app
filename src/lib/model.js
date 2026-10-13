@@ -180,6 +180,32 @@ export function tone(status) {
   return 'none';
 }
 
+/* ---------------- buy tracker ----------------
+ * Tickets one account may buy for an event: the event's own limit, else the
+ * site's default (both team settings), else none. */
+export function buyLimitOf(ev, settings) {
+  if (!ev || !settings) return null;
+  return (settings.eventBuyLimits || {})[ev.key] || (settings.buyLimits || {})[ev.site] || null;
+}
+
+/* Every account of yours against one event: how many it bought, how many it
+ * has left, and which to use next. Order = the suggestion order: room left
+ * first (most first), full ones last, then by email.
+ * -> { limit, rows: [{ account, qty, left, full, over, purchases }], total, used, next } */
+export function buysOf(accounts, purchases, eventKey, limit) {
+  const here = purchases.filter(p => p.eventKey === eventKey);
+  const rows = accounts.map(a => {
+    const mine = here.filter(p => p.accountId === a.id).sort((x, y) => String(y.boughtOn).localeCompare(String(x.boughtOn)));
+    const qty = mine.reduce((n, p) => n + p.qty, 0);
+    const left = limit ? limit - qty : null;
+    return { account: a, qty, left, full: !!limit && qty >= limit, over: !!limit && qty > limit, purchases: mine };
+  });
+  const room = r => (r.left === null ? Infinity : r.left);
+  rows.sort((a, b) => (a.full - b.full) || (room(b) - room(a)) || (limit ? 0 : a.qty - b.qty) || a.account.email.localeCompare(b.account.email));
+  const total = here.reduce((n, p) => n + p.qty, 0);
+  return { limit, rows, total, used: rows.filter(r => r.qty > 0).length, next: rows.find(r => !r.full) || null };
+}
+
 function ratesAt(m, at) {
   return SK.profit.pickRates(m.fx, SK.settings.normalize(m.team || {}).fxOverride, at);
 }
@@ -187,7 +213,27 @@ function ratesAt(m, at) {
 function buyOf(m, r, ev, sectorId, listing) {
   if (!ev) return null;
   const summary = ((m.scanMeta[ev.key] || {})[String(sectorId)] || {}).summary;
-  return SK.profit.buyPriceOf({ site: ev.site, request: r || {}, listing: listing || {}, event: ev, sector: sectorOf(ev, sectorId), summary });
+  const priceList = ((m.sectorPrices || {})[ev.key] || {})[String(sectorId)] || null;
+  return SK.profit.buyPriceOf({ site: ev.site, request: r || {}, listing: listing || {}, event: ev, sector: sectorOf(ev, sectorId), summary, priceList });
+}
+
+/* the currency a site sells in, for a price typed with nothing else to go by */
+const SITE_CURRENCY = { ebileta: 'ALL', 'ebileta-ks': 'EUR', efinity: 'RSD', posttick: 'EUR' };
+export const siteCurrencyOf = site => SITE_CURRENCY[site] || 'ALL';
+
+/* A sector's ticket price, for the price list and a new purchase: the one the
+ * team typed, else the site's (Posttick's categories, eFinity's sector price,
+ * the range an eBileta scan read), else what you last paid there.
+ * -> { amount, currency, source: 'list' | 'site' | 'paid', range } or null */
+export function sectorPriceOf(m, ev, sec, purchases) {
+  const typed = ((m.sectorPrices || {})[ev.key] || {})[String(sec.id)];
+  if (typed && typed.amount > 0) return { amount: typed.amount, currency: typed.currency, source: 'list', range: null };
+  const summary = ((m.scanMeta[ev.key] || {})[String(sec.id)] || {}).summary;
+  const site = SK.profit.buyPriceOf({ site: ev.site, event: ev, sector: sec, summary });
+  if (site) return { amount: site.amount, currency: site.currency, source: 'site', range: site.range || null };
+  const paid = (purchases || []).filter(p => p.eventKey === ev.key && String(p.sectorId) === String(sec.id) && p.price > 0)
+    .sort((a, b) => String(b.boughtOn).localeCompare(String(a.boughtOn)))[0];
+  return paid ? { amount: paid.price, currency: paid.currency, source: 'paid', range: null } : null;
 }
 
 function moneyOf(m, listing, buy) {
@@ -219,6 +265,8 @@ export function buildView(m, me, opts = {}) {
   const archived = new Set(settings.archivedEvents);
   const ownerName = uid => (m.profiles[uid] || {}).displayName || 'someone';
   const allRequests = Object.values(m.requests).filter(r => !hidden[r.id]);
+  const accounts = Object.values(m.accounts || {}).filter(a => a.userId === me).sort((a, b) => a.email.localeCompare(b.email));
+  const purchases = Object.values(m.purchases || {}).filter(p => p.userId === me);
 
   /* When each event is. Sites rarely fill `date` (eBileta and Posttick put
    * it in the title, eFinity nowhere), so: the date and title together, as
@@ -269,6 +317,8 @@ export function buildView(m, me, opts = {}) {
       scannedAt: ((m.scanMeta[r.eventKey] || {})[r.sec] || {}).at || 0,
       pendingGone: !!(m.state[r.id] || {}).pendingGone,
       muffled: muffled(m, r),
+      /* tickets bought for it so far, over every account */
+      purchased: purchases.filter(p => p.requestId === r.id).reduce((n, p) => n + p.qty, 0),
       eventNum: ev ? ev.num : 0,
       eventTitle: ev ? SK.util.eventInfo(ev).name || ev.key : r.eventKey,
       time: ev ? evTime(ev.key) : null,
@@ -306,7 +356,8 @@ export function buildView(m, me, opts = {}) {
           id: String(sec.id), code: sec.code, name: sec.name, meta: sec.meta || {},
           url: sectorUrlOf(ev, sec),
           summary: meta ? Object.assign({}, meta.summary, { at: meta.at }) : null,
-          wanted: wanted[String(sec.id)] || 0
+          wanted: wanted[String(sec.id)] || 0,
+          price: sectorPriceOf(m, ev, sec, purchases)
         };
       }),
       open: mine.filter(r => !r.done).length,
@@ -317,7 +368,11 @@ export function buildView(m, me, opts = {}) {
       lastScanAt: newest ? newest.at : 0,
       lastScanBy: newest ? newest.by : '',
       scanner: lease && lease.expiresAt > now ? deviceName(lease.deviceId) : '',
-      health: m.health[ev.key] || null
+      health: m.health[ev.key] || null,
+      buyLimit: (settings.eventBuyLimits || {})[ev.key] || null,
+      siteBuyLimit: (settings.buyLimits || {})[ev.site] || null,
+      buys: buysOf(accounts, purchases, ev.key, buyLimitOf(ev, settings)),
+      priceCurrency: siteCurrencyOf(ev.site)
     };
   }).sort((a, b) => byNearest(now)(a, b) || a.num - b.num);
   for (const ev of events) ev.tone = tone(ev.worst);
@@ -381,7 +436,7 @@ export function buildView(m, me, opts = {}) {
     .map(t => Object.assign({}, t, { owner: ownerName(t.userId) }));
 
   return {
-    me, settings, events, requests, listings, sales, devices, team, teamListings,
+    me, settings, events, requests, listings, sales, devices, team, teamListings, accounts, purchases,
     open, attention,
     pcsOnline: devices.filter(d => d.online),
     snoozeUntil: (m.profiles[me] || {}).snoozeUntil || 0,

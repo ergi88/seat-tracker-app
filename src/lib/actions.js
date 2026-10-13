@@ -11,7 +11,7 @@
 import { SK } from './sk.js';
 import { supa, must } from './supa.js';
 import { store } from './store.svelte.js';
-import { toRequest, toListing, toTeamPrice } from './shapes.js';
+import { toRequest, toListing, toTeamPrice, toAccount, toPurchase, toSectorPrice } from './shapes.js';
 import { settingsFor, eventUrlOf } from './model.js';
 
 const U = SK.util;
@@ -371,3 +371,127 @@ export async function messageTeam({ text, to, eventKey, section }) {
   }
   return sent;
 }
+
+/* ---------------- buy tracker ------------------------------------------
+ * Your ticket-site accounts and what each bought: yours alone (the database
+ * shows them to nobody else). Limits are team settings, as they are the
+ * sites' rules: buyLimits per site, eventBuyLimits for one event. */
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function saveAccount(fields) {
+  const userId = me();
+  const email = String(fields.email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Type a valid email.');
+  const taken = Object.values(store.mirror.accounts || {}).find(a => a.userId === userId && a.email === email && a.id !== fields.id);
+  if (taken) throw new Error(`${email} is already saved.`);
+  const row = {
+    email,
+    first_name: String(fields.firstName || '').trim(),
+    last_name: String(fields.lastName || '').trim(),
+    birthday: DATE.test(fields.birthday || '') ? fields.birthday : null,
+    notes: String(fields.notes || '').trim()
+  };
+  const saved = fields.id
+    ? await must(supa.from('buy_accounts').update(row).eq('id', fields.id).select().maybeSingle())
+    : await must(supa.from('buy_accounts').insert([Object.assign({ id: U.newId('a'), user_id: userId }, row)]).select().single());
+  if (!saved) throw new Error('That account no longer exists.');
+  const a = toAccount(saved);
+  store.mutate(m => { (m.accounts = m.accounts || {})[a.id] = a; });
+  return a;
+}
+
+/* its purchases go with it (the database cascades) */
+export async function deleteAccount(id) {
+  me();
+  await must(supa.from('buy_accounts').delete().eq('id', id));
+  store.mutate(m => {
+    delete (m.accounts || {})[id];
+    for (const [pid, p] of Object.entries(m.purchases || {})) if (p.accountId === id) delete m.purchases[pid];
+  });
+}
+
+/* A purchase linked to a request makes it Bought once its purchases cover
+ * its tickets, and gives it the price paid when it has none typed. */
+async function followRequest(requestId, purchase) {
+  const r = requestId && store.mirror.requests[requestId];
+  if (!r || r.userId !== me()) return;
+  const got = Object.values(store.mirror.purchases || {}).filter(p => p.requestId === requestId).reduce((n, p) => n + p.qty, 0);
+  const changes = {};
+  if (got >= Number(r.qty) && !r.bought && !r.done) changes.bought = true;
+  if (purchase && Number(purchase.price) > 0 && !(Number(r.buyPrice) > 0)) {
+    changes.buyPrice = purchase.price;
+    changes.buyCurrency = purchase.currency;
+  }
+  if (Object.keys(changes).length) await updateRequest(requestId, changes);
+}
+
+/* The event's price list: one sector's price, shared with the team. An empty
+ * amount takes it off the list (the site's own price shows again). */
+export async function setSectorPrice(eventKey, sectorId, amount, currency) {
+  me();
+  const n = Math.round(Number(amount) * 100) / 100;
+  const sid = String(sectorId);
+  if (!(n > 0)) {
+    await must(supa.from('sector_prices').delete().eq('event_key', eventKey).eq('sector_id', sid));
+    store.mutate(m => { delete ((m.sectorPrices || {})[eventKey] || {})[sid]; });
+    return null;
+  }
+  const row = await must(supa.from('sector_prices').upsert([{
+    event_key: eventKey, sector_id: sid, amount: n,
+    currency: SK.profit.CURRENCIES.includes(currency) ? currency : 'ALL', updated_by: me()
+  }]).select().single());
+  const price = toSectorPrice(row);
+  store.mutate(m => { ((m.sectorPrices = m.sectorPrices || {})[eventKey] = m.sectorPrices[eventKey] || {})[sid] = price; });
+  return price;
+}
+
+export async function savePurchase(fields) {
+  const userId = me();
+  const account = (store.mirror.accounts || {})[fields.accountId];
+  if (!account || account.userId !== userId) throw new Error('Pick an account.');
+  if (!store.mirror.events[fields.eventKey]) throw new Error('That event is no longer tracked.');
+  const price = fields.price === '' || fields.price === null || fields.price === undefined || !(Number(fields.price) > 0)
+    ? null : Math.round(Number(fields.price) * 100) / 100;
+  const row = {
+    account_id: account.id,
+    event_key: fields.eventKey,
+    request_id: fields.requestId || null,
+    sector_id: fields.sectorId ? String(fields.sectorId) : null,
+    qty: U.clampInt(fields.qty, 1, 1, 999),
+    price,
+    currency: SK.profit.CURRENCIES.includes(fields.currency) ? fields.currency : 'ALL',
+    bought_on: DATE.test(fields.boughtOn || '') ? fields.boughtOn : new Date().toISOString().slice(0, 10),
+    order_ref: String(fields.orderRef || '').trim(),
+    notes: String(fields.notes || '').trim()
+  };
+  const before = fields.id ? (store.mirror.purchases || {})[fields.id] : null;
+  const saved = fields.id
+    ? await must(supa.from('purchases').update(row).eq('id', fields.id).select().maybeSingle())
+    : await must(supa.from('purchases').insert([Object.assign({ id: U.newId('p'), user_id: userId }, row)]).select().single());
+  if (!saved) throw new Error('That purchase no longer exists.');
+  const p = toPurchase(saved);
+  store.mutate(m => { (m.purchases = m.purchases || {})[p.id] = p; });
+  /* a price paid where the list and the site know none: the list learns it */
+  if (p.sectorId && p.price > 0 && !((store.mirror.sectorPrices || {})[p.eventKey] || {})[p.sectorId]) {
+    const ev = store.mirror.events[p.eventKey];
+    const sec = ev && (ev.sectors || []).find(s => String(s.id) === p.sectorId);
+    const summary = ((store.mirror.scanMeta[p.eventKey] || {})[p.sectorId] || {}).summary;
+    if (sec && !SK.profit.buyPriceOf({ site: ev.site, event: ev, sector: sec, summary })) {
+      await setSectorPrice(p.eventKey, p.sectorId, p.price, p.currency).catch(() => {});
+    }
+  }
+  await followRequest(p.requestId, p);
+  if (before && before.requestId && before.requestId !== p.requestId) await followRequest(before.requestId, null);
+  return p;
+}
+
+export async function deletePurchase(id) {
+  me();
+  await must(supa.from('purchases').delete().eq('id', id));
+  store.mutate(m => { delete (m.purchases || {})[id]; });
+}
+
+/* the site's default (null clears it), or one event's own limit (null = back to the site's) */
+export const setSiteBuyLimit = (site, n) => saveSettings({ buyLimits: { [site]: Number(n) > 0 ? Number(n) : 0 } });
+export const setEventBuyLimit = (eventKey, n) => saveSettings({ eventBuyLimits: { [eventKey]: Number(n) > 0 ? Number(n) : 0 } });

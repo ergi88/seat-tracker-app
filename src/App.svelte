@@ -20,6 +20,10 @@
   import MessageSheet from './routes/MessageSheet.svelte';
   import DeleteRequestSheet from './routes/DeleteRequestSheet.svelte';
   import DeleteListingSheet from './routes/DeleteListingSheet.svelte';
+  import Accounts from './routes/Accounts.svelte';
+  import AccountSheet from './routes/AccountSheet.svelte';
+  import PurchaseSheet from './routes/PurchaseSheet.svelte';
+  import PricesSheet from './routes/PricesSheet.svelte';
 
   const route = $derived(router.route);
   const sheet = $derived(router.sheet);
@@ -56,10 +60,11 @@
       {:else if route.name === 'money'}<Money />
       {:else if route.name === 'inbox'}<Inbox />
       {:else if route.name === 'settings'}<Settings />
+      {:else if route.name === 'accounts'}<Accounts />
       {/if}
     {/key}
   </div>
-  {#if route.name !== 'add' && route.name !== 'map'}<TabBar />{/if}
+  {#if route.name !== 'add' && route.name !== 'map' && route.name !== 'accounts'}<TabBar />{/if}
 
   {#if sheet}
     {#key sheet}
@@ -70,11 +75,14 @@
       {:else if sheet.kind === 'listing'}<DealSheet listingId={sheet?.id} tab={sheet?.tab} />
       {:else if sheet.kind === 'deleteRequest'}<DeleteRequestSheet id={sheet?.id} />
       {:else if sheet.kind === 'deleteListing'}<DeleteListingSheet id={sheet?.id} />
+      {:else if sheet.kind === 'account'}<AccountSheet id={sheet?.id} />
+      {:else if sheet.kind === 'prices'}<PricesSheet eventKey={sheet?.eventKey} />
+      {:else if sheet.kind === 'purchase'}<PurchaseSheet id={sheet?.id} eventKey={sheet?.eventKey} requestId={sheet?.requestId} />
       {/if}
     {/key}
   {/if}
 {/if}
-{#if store.ready && !sheet}<InstallPrompt tabbar={!!store.user && route.name !== 'add' && route.name !== 'map'} />{/if}
+{#if store.ready && !sheet}<InstallPrompt tabbar={!!store.user && route.name !== 'add' && route.name !== 'map' && route.name !== 'accounts'} />{/if}
 <Toasts />
 
 <style>

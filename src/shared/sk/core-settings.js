@@ -83,6 +83,18 @@
     return out;
   }
 
+  /* tickets one buying account may get per event: by site ({ ebileta: 4 }, a
+   * site left out has no limit) and by event key for one that differs
+   * ({ 'ebileta:2182': 2 }); 0 or empty removes one */
+  function buyLimitsOf(v, keyRe) {
+    const out = {};
+    for (const [key, n] of Object.entries(v || {})) {
+      const k = Math.round(Number(n));
+      if (keyRe.test(key) && Number.isFinite(k) && k >= 1) out[key] = Math.min(k, 999);
+    }
+    return out;
+  }
+
   function num(v, dflt, lo, hi) {
     const n = Number(v);
     if (!Number.isFinite(n)) return dflt;
@@ -115,7 +127,9 @@
       ntfyServer: String(s.ntfyServer || DEFAULTS.ntfyServer).trim().replace(/\/+$/, '') || DEFAULTS.ntfyServer,
       phoneTopic: String(s.phoneTopic || '').trim(),
       cmdTopic: String(s.cmdTopic || '').trim(),
-      fxOverride: fxOverrideOf(s.fxOverride)
+      fxOverride: fxOverrideOf(s.fxOverride),
+      buyLimits: buyLimitsOf(s.buyLimits, /^[a-z0-9-]+$/i),
+      eventBuyLimits: buyLimitsOf(s.eventBuyLimits, /^[a-z0-9-]+:\S+$/i)
     };
 
     const q = Object.assign({}, DEFAULTS.quiet, s.quiet || {});
@@ -198,7 +212,7 @@
    *   team   - shared by everyone (how often events are scanned)
    *   device - this PC only (look and on-site panels)
    *   user   - each person (notifications, topics, defaults for new requests) */
-  const TEAM_KEYS = ['autoMin', 'eventCheckMin', 'sweepMin', 'fxOverride'];
+  const TEAM_KEYS = ['autoMin', 'eventCheckMin', 'sweepMin', 'fxOverride', 'buyLimits', 'eventBuyLimits'];
   const DEVICE_KEYS = ['theme', 'sidebarMode', 'panels', 'listSort', 'selectSeats', 'pcNotify'];
 
   function scopeOf(key) {

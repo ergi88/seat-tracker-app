@@ -199,3 +199,52 @@ test('bought: an event where every request is bought goes violet; done beats bou
   const r5 = buildView(m, ME, { now: NOW }).requests.find(r => r.id === 'r5');
   assert.notEqual(r5.status, 'BOUGHT');
 });
+
+test('buy tracker: per account against the site\'s limit, most left first, full last', () => {
+  const v = view();
+  const b = v.events.find(e => e.key === 'ebileta:2160').buys;
+  assert.equal(b.limit, 4, 'eBileta\'s default');
+  assert.equal(b.total, 6, 'only my purchases');
+  assert.deepEqual(b.rows.map(r => [r.account.email, r.qty, r.left]), [
+    ['mum.account@gmail.com', 0, 4], ['ergi.tickets2@gmail.com', 2, 2], ['ergi.tickets1@gmail.com', 4, 0]
+  ]);
+  assert.equal(b.rows[2].full, true);
+  assert.equal(b.next.account.id, 'a3');
+  assert.equal(b.used, 2);
+  assert.ok(!v.accounts.some(a => a.id === 'a9'), 'a teammate\'s account is not mine');
+  assert.equal(v.requests.find(r => r.id === 'r1').purchased, 6);
+});
+
+test('buy tracker: an event\'s own limit beats the site\'s; over the limit is flagged', () => {
+  const m = demoMirror(NOW);
+  m.team = Object.assign({}, m.team, { eventBuyLimits: { 'ebileta:2160': 3 } });
+  const b = buildView(m, ME, { now: NOW }).events.find(e => e.key === 'ebileta:2160').buys;
+  assert.equal(b.limit, 3);
+  const a1 = b.rows.find(r => r.account.id === 'a1');
+  assert.equal(a1.over, true);
+  assert.equal(a1.left, -1);
+  const other = buildView(m, ME, { now: NOW }).events.find(e => e.key === 'posttick:max-amini-tirana');
+  assert.equal(other.buys.limit, null, 'no default for Posttick: no limit');
+});
+
+test('price list: a typed price beats the site\'s, which beats what you paid; a request\'s buy price follows it', () => {
+  const m = demoMirror(NOW);
+  const ev0 = buildView(m, ME, { now: NOW }).events.find(e => e.key === 'ebileta:2160');
+  const site = ev0.sectors.find(s => s.price && s.price.source === 'site');
+  const bare = ev0.sectors.find(s => !s.price);
+  assert.ok(site && bare, 'the demo has a sector with a site price and one without');
+
+  m.sectorPrices = { 'ebileta:2160': { [site.id]: { amount: 4500, currency: 'ALL' }, 12: { amount: 3800, currency: 'ALL' } } };
+  m.purchases.p3 = { id: 'p3', userId: ME, accountId: 'a3', eventKey: 'ebileta:2160', requestId: null, sectorId: bare.id, qty: 1,
+    price: 2500, currency: 'ALL', boughtOn: '2026-10-01', orderRef: '', notes: '', createdAt: NOW };
+  const v = buildView(m, ME, { now: NOW });
+  const ev = v.events.find(e => e.key === 'ebileta:2160');
+  assert.deepEqual(ev.sectors.find(s => s.id === site.id).price, { amount: 4500, currency: 'ALL', source: 'list', range: null });
+  assert.equal(ev.sectors.find(s => s.id === bare.id).price.source, 'paid');
+  assert.equal(ev.sectors.find(s => s.id === bare.id).price.amount, 2500);
+  assert.equal(ev.priceCurrency, 'ALL');
+  /* r1 sits in sector 12 with no price typed on it: the list's price is its buy price */
+  const r1 = v.requests.find(r => r.id === 'r1');
+  assert.equal(r1.buy.amount, 3800);
+  assert.equal(r1.buy.source, 'price list');
+});

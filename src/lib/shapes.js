@@ -57,6 +57,23 @@ export const toState = r => ({
 
 export const toScanMeta = r => ({ at: time(r.scanned_at), summary: r.summary || {}, by: r.scanned_by || '' });
 export const toLease = r => ({ deviceId: r.device_id, userId: r.user_id, expiresAt: time(r.expires_at) });
+/* a ticket-site login of yours, and one purchase made with it (buy tracker) */
+export const toAccount = r => ({
+  id: r.id, userId: r.user_id, email: r.email || '', firstName: r.first_name || '', lastName: r.last_name || '',
+  birthday: r.birthday ? String(r.birthday).slice(0, 10) : '', notes: r.notes || '', createdAt: time(r.created_at)
+});
+
+export const toPurchase = r => ({
+  id: r.id, userId: r.user_id, accountId: r.account_id, eventKey: r.event_key, requestId: r.request_id || null,
+  sectorId: r.sector_id || null, qty: Number(r.qty) || 1, price: numOr(r.price), currency: r.currency || 'ALL',
+  boughtOn: r.bought_on ? String(r.bought_on).slice(0, 10) : '', orderRef: r.order_ref || '', notes: r.notes || '',
+  createdAt: time(r.created_at)
+});
+
+export const toSectorPrice = r => ({
+  amount: Number(r.amount), currency: r.currency || 'ALL', updatedBy: r.updated_by || null, updatedAt: time(r.updated_at)
+});
+
 export const toDevice = r => ({ id: r.id, userId: r.user_id, name: r.name || '', lastSeen: time(r.last_seen), version: r.version || '' });
 
 export const toAlert = r => ({
@@ -89,7 +106,14 @@ export const SPECS = [
   { name: 'teamPrices', table: 'team_prices', ts: 'seen_at', clear: m => { m.teamPrices = {}; },
     put: (m, r) => { m.teamPrices[r.listing_id] = toTeamPrice(r); } },
   { name: 'fx', table: 'fx_rates', ts: 'updated_at', clear: m => { m.fx = {}; },
-    put: (m, r) => { m.fx[String(r.day).slice(0, 10)] = r.lek_per || {}; } }
+    put: (m, r) => { m.fx[String(r.day).slice(0, 10)] = r.lek_per || {}; } },
+  /* optional: a database without the buy tracker yet still syncs everything else */
+  { name: 'accounts', table: 'buy_accounts', ts: 'updated_at', optional: true, clear: m => { m.accounts = {}; },
+    put: (m, r) => { m.accounts[r.id] = toAccount(r); } },
+  { name: 'purchases', table: 'purchases', ts: 'updated_at', optional: true, clear: m => { m.purchases = {}; },
+    put: (m, r) => { m.purchases[r.id] = toPurchase(r); } },
+  { name: 'prices', table: 'sector_prices', ts: 'updated_at', optional: true, clear: m => { m.sectorPrices = {}; },
+    put: (m, r) => { (m.sectorPrices[r.event_key] = m.sectorPrices[r.event_key] || {})[r.sector_id] = toSectorPrice(r); } }
 ];
 
 export const specOf = name => SPECS.find(s => s.name === name);
@@ -97,7 +121,7 @@ export const specOf = name => SPECS.find(s => s.name === name);
 export function emptyMirror() {
   return {
     team: {}, profiles: {}, events: {}, requests: {}, state: {}, scanMeta: {}, health: {}, leases: {},
-    listings: {}, sales: {}, teamPrices: {}, fx: {}, members: [], devices: [], alerts: [],
+    listings: {}, sales: {}, teamPrices: {}, fx: {}, accounts: {}, purchases: {}, sectorPrices: {}, members: [], devices: [], alerts: [],
     fingerprints: {}, serverOffset: 0, pulledAt: 0
   };
 }
@@ -108,4 +132,6 @@ export function prune(m) {
   for (const id of Object.keys(m.state)) if (!m.requests[id]) delete m.state[id];
   for (const key of Object.keys(m.scanMeta)) if (!m.events[key]) delete m.scanMeta[key];
   for (const key of Object.keys(m.health)) if (!m.events[key]) delete m.health[key];
+  for (const key of Object.keys(m.sectorPrices || {})) if (!m.events[key]) delete m.sectorPrices[key];
+  for (const [id, p] of Object.entries(m.purchases || {})) if (!m.events[p.eventKey] || !(m.accounts || {})[p.accountId]) delete m.purchases[id];
 }
