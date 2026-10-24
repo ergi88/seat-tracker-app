@@ -103,7 +103,40 @@
     }
     const title = SK.util.decodeHtml(((html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) || [])[1] || '')
       .replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim());
+    const shapes = parseShapes(html);
+    for (const s of sections) {
+      const shape = shapes.byId[s.id] || shapes.byName[s.name];
+      if (shape) s.shape = shape;
+    }
     return { title, sections };
+  }
+
+  /* "278,631 308,684 " -> "278,631 308,684" */
+  const cleanPoints = p => String(p || '').trim().replace(/\s+/g, ' ');
+
+  /* Each sector's outline on the stadium map. The map is a picture with an
+   * invisible <polygon> over every sector on sale, in the coordinates of the
+   * SVG's viewBox. eBileta removes the polygon along with the sector while the
+   * picture still shows it, so the outline is kept to badge the sector there.
+   * -> { byId: { [id]: { points, vb } }, byName: { [name]: … } } */
+  function parseShapes(html) {
+    const out = { byId: {}, byName: {} };
+    const at = html.search(/class="map"/);
+    const svg = at === -1 ? '' : html.slice(at);
+    const vb = cleanPoints((svg.match(/<svg\b[^>]*\bviewBox="([^"]*)"/i) || [])[1]);
+    const re = /<polygon\b([^>]*)>/gi;
+    let m;
+    while ((m = re.exec(svg)) !== null) {
+      const tag = m[1];
+      const attr = name => SK.util.decodeHtml((tag.match(new RegExp(`(?:^|\\s)${name}="([^"]*)"`)) || [])[1] || '');
+      const points = cleanPoints(attr('points'));
+      if (!points) continue;
+      const shape = vb ? { points, vb } : { points };
+      const id = attr('artacom:id'), name = attr('artacom:descr').trim();
+      if (id) out.byId[id] = shape;
+      if (name) out.byName[name] = shape;
+    }
+    return out;
   }
 
   /* Descriptions look like "<SECTOR> <rowWord> <row> <seatWord> <seat>";
@@ -184,8 +217,34 @@
 
   /* a parsed section -> the extension's sector shape */
   function toSector(s) {
-    return { id: String(s.id), code: s.code, name: s.name, meta: { idSM: s.idSM, tipoM: s.tipoM, status: s.status } };
+    const meta = { idSM: s.idSM, tipoM: s.tipoM, status: s.status };
+    if (s.shape && s.shape.points) meta.shape = s.shape;
+    return { id: String(s.id), code: s.code, name: s.name, meta };
   }
+
+  /* eBileta takes a sector off the event page a few days after it sold out,
+   * and a price group goes with its last sector. Tickets bought there still
+   * need it, so a sector the page stops listing is kept: sold out, with
+   * meta.gone = when it was first missed. Listed again, it is the page's
+   * again. Its outline on the map is kept the same way: a sector still listed
+   * whose polygon is gone keeps the last one seen. -> the sector list to store */
+  function keepSectors(prev, fresh, now) {
+    const before = new Map((prev || []).map(s => [String(s.id), s]));
+    fresh = (fresh || []).map(s => {
+      const was = before.get(String(s.id));
+      const shape = was && was.meta && was.meta.shape;
+      return shape && !(s.meta && s.meta.shape) ? Object.assign({}, s, { meta: Object.assign({}, s.meta, { shape }) }) : s;
+    });
+    const listed = new Set(fresh.map(s => String(s.id)));
+    const kept = (prev || []).filter(s => !listed.has(String(s.id))).map(s => {
+      const meta = Object.assign({}, s.meta, { status: 'soldout' });
+      if (!meta.gone) meta.gone = now || Date.now();
+      return Object.assign({}, s, { meta });
+    });
+    return (fresh || []).concat(kept);
+  }
+
+  const isGone = sector => !!(sector && sector.meta && sector.meta.gone);
 
   const opts = { credentials: 'include' };   // some events need the logged-in session
 
@@ -231,8 +290,12 @@
 
     scanAllFilter(sector) { return !(sector.meta && sector.meta.status === 'soldout'); },
 
+    keepSectors,
+    isGone,
+
     sectorHint(sector) {
       const st = sector.meta && sector.meta.status;
+      if (isGone(sector)) return 'removed from the site';
       return st === 'soldout' ? 'sold out (site list)' : st && st !== 'unknown' ? `${st} availability` : sector.name;
     },
 
@@ -309,7 +372,7 @@
     }
   });
 
-  SK.ebileta = { ORIGIN, HOSTS, hostOf, isEbileta, eventPageUrl, idSMOf, idSMIn, splitHeading, STATUS_LABELS, shortCode, parseSections, parseSeats, parsePrices, parseEventList, seatPageUrl, sectorPageUrl, toSector };
+  SK.ebileta = { ORIGIN, HOSTS, hostOf, isEbileta, eventPageUrl, idSMOf, idSMIn, splitHeading, STATUS_LABELS, shortCode, parseSections, parseShapes, cleanPoints, parseSeats, parsePrices, parseEventList, seatPageUrl, sectorPageUrl, toSector, keepSectors, isGone };
 
   if (typeof module === 'object' && module.exports) module.exports = SK;
 })(globalThis);

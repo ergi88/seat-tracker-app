@@ -139,6 +139,7 @@ const SENIDAH_SECTIONS = [
 export const VENUES = [{
   id: 'air-albania',
   name: 'Air Albania Stadium',
+  names: ['Air Albania'],                         // as eBileta writes the venue: "AIR ALBANIA STADIUM"
   sites: ['ebileta'],
   viewBox: [-10, 140, W + 20, 990],
   outline: `M 0 1015 L 0 330 C 0 205 110 150 290 150 L ${W - 290} 150 C ${W - 110} 150 ${W} 205 ${W} 330 L ${W} 1015 L ${W - 255} 1110 L 255 1110 Z`,
@@ -149,6 +150,7 @@ export const VENUES = [{
 }, {
   id: 'kongreseve',
   name: 'Pallati i Kongreseve',
+  names: ['Kongreseve'],
   sites: ['posttick'],
   viewBox: [-10, 150, 1390, 1035],
   outline: 'M 465 168 L 905 173 L 1032 207 L 1190 365 C 1270 540 1330 680 1358 775 C 1320 900 1260 1010 1195 1085 L 845 1168 L 510 1168 L 165 1075 C 90 990 30 880 5 765 C 60 610 120 470 180 340 L 335 198 Z',
@@ -158,6 +160,7 @@ export const VENUES = [{
 }, {
   id: 'senidah-arena',
   name: 'Senidah arena',
+  names: ['Stark Arena', 'Štark Arena'],
   sites: ['efinity'],
   viewBox: [280, -10, 1460, 1400],
   outline: 'M 850 0 L 1170 0 L 1415 100 L 1630 305 L 1717 515 L 1717 800 L 1605 1085 L 1380 1310 L 1110 1382 L 865 1382 L 605 1310 L 407 1110 L 297 855 L 297 568 L 405 305 L 610 100 Z',
@@ -167,16 +170,44 @@ export const VENUES = [{
   offMap: []
 }];
 
-/* The venue an event is played in, known from its sectors: when most of a
- * drawing's section codes are among the event's sector codes, it is that
- * stadium. Works for any eBileta event at Air Albania, whatever its title. */
+/* The venue an event is played in, known from its sectors. Any of these says so:
+ *  - most of a drawing's section codes are among the event's sector codes;
+ *  - nearly all of the event's sectors are this drawing's (and a fair number
+ *    of them): eBileta drops sectors a few days after they sell out, so a
+ *    stadium half sold out no longer lists most of its drawing;
+ *  - the event's venue or title names the place.
+ * Once known on this device, an event keeps its venue, so further removals
+ * can never take the map away. Works for any eBileta event at Air Albania,
+ * whatever its title. */
+const KEEP = 'sk.venue.';
+function remembered(key) {
+  try { return key && typeof localStorage !== 'undefined' ? localStorage.getItem(KEEP + key) : null; } catch (e) { return null; }
+}
+function remember(key, id) {
+  try { if (key && typeof localStorage !== 'undefined' && localStorage.getItem(KEEP + key) !== id) localStorage.setItem(KEEP + key, id); } catch (e) { /* private mode */ }
+}
+
 export function venueFor(event) {
   if (!event || !event.sectors || !event.sectors.length) return null;
-  const codes = new Set(event.sectors.map(s => SK.util.normKey(s.code)));
-  for (const v of VENUES) {
-    if (v.sites && event.site && !v.sites.includes(event.site)) continue;   // an "A1" on another site is another hall
-    const hit = v.sections.filter(s => codes.has(SK.util.normKey(s.code))).length;
+  const forSite = VENUES.filter(v => !(v.sites && event.site && !v.sites.includes(event.site)));   // an "A1" on another site is another hall
+  const found = matchVenue(event, forSite) || forSite.find(v => v.id === remembered(event.key)) || null;
+  if (found) remember(event.key, found.id);
+  return found;
+}
+
+function matchVenue(event, venues) {
+  const N = SK.util.normKey;
+  const codes = new Set(event.sectors.map(s => N(s.code)));
+  const info = event.info || {};
+  const where = N(`${info.venue || ''} ${event.title || ''}`);
+  for (const v of venues) {
+    const drawn = new Set(v.sections.map(s => N(s.code)));
+    const hit = [...codes].filter(c => drawn.has(c)).length;
     if (hit >= v.sections.length * 0.6) return v;
+    const aside = new Set((v.offMap || []).map(N));
+    const own = new Set(event.sectors.filter(s => !aside.has(N(s.code)) && !(v.covered && v.covered.test(String(s.code)))).map(s => N(s.code))).size;
+    if (hit >= Math.max(4, v.sections.length * 0.2) && hit >= own * 0.9) return v;
+    if (hit && (v.names || []).some(n => where.includes(N(n)))) return v;
   }
   return null;
 }

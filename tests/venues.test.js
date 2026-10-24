@@ -31,6 +31,31 @@ test('an event is at Air Albania when its sectors say so, whatever its title', (
   assert.equal(venueFor({ sectors: [] }), null);
 });
 
+test('a stadium eBileta has taken sold-out sectors off is still that stadium', () => {
+  /* only the north and south stands left on sale, plus the extras: 16 of 54 drawn */
+  const left = REAL.filter(c => /^[NS]\d/.test(c) || AIR.offMap.includes(c));
+  assert.ok(left.filter(c => !AIR.offMap.includes(c)).length < 54 * 0.6);
+  assert.equal(venueFor(Object.assign(event(left), { site: 'ebileta' })), AIR);
+  /* a handful left, but the venue says where it is played */
+  const few = ['N101', 'N102', 'V VIP'];
+  assert.equal(venueFor(Object.assign(event(few), { site: 'ebileta' })), null);
+  assert.equal(venueFor(Object.assign(event(few), { site: 'ebileta', info: { venue: 'AIR ALBANIA STADIUM' } })), AIR);
+  assert.equal(venueFor(Object.assign(event(few), { site: 'ebileta', title: 'EGNATIA - MIDTJYLLAND - Air Albania' })), AIR);
+  /* sectors from elsewhere mixed in: not this stadium */
+  assert.equal(venueFor(Object.assign(event([...left.slice(0, 6), 'A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1']), { site: 'ebileta' })), null);
+});
+
+test('once known on this device, an event keeps its stadium', () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) };
+  try {
+    assert.equal(venueFor(Object.assign(event(REAL), { site: 'ebileta', key: 'ebileta:2174' })), AIR);
+    assert.equal(venueFor(Object.assign(event(['N101', 'MEDIA']), { site: 'ebileta', key: 'ebileta:2174' })), AIR);
+    assert.equal(venueFor(Object.assign(event(['N101', 'MEDIA']), { site: 'ebileta', key: 'ebileta:9999' })), null);
+    assert.equal(venueFor(Object.assign(event(['N101']), { site: 'posttick', key: 'ebileta:2174' })), null, 'never on another site');
+  } finally { delete globalThis.localStorage; }
+});
+
 test('mirrored corners sit on the other side of the halfway line', () => {
   const at = code => AIR.sections.find(s => s.code === code);
   const cx = s => (s.shape === 'rect' ? s.x + s.w / 2 : s.label.x);

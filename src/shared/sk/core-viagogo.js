@@ -560,16 +560,22 @@
   const ROWS = ['#listings-container', '[data-testid="listings-container"]']
     .map(c => `${c} [data-listing-id], ${c} a.ensemble_listingCard__root`).join(', ');
 
-  const rowCount = doc => new Set(doc.querySelectorAll(ROWS)).size;
+  /* The card is the innermost match: viagogo now also puts data-listing-id
+   * on a wrapper div (data-image-container) that has no price, feature or
+   * aria-label, so a match holding another match is a wrapper, not a row. */
+  const ROW_INSIDE = '[data-listing-id], a.ensemble_listingCard__root';
+  const rowsOf = doc => [...doc.querySelectorAll(ROWS)].filter(el => !el.querySelector(ROW_INSIDE));
+
+  const rowCount = doc => rowsOf(doc).length;
   /* cheap "has the top of the list changed" for waiting on the page */
-  const firstRowSig = doc => { const a = doc.querySelector(ROWS); return a ? (a.getAttribute('data-listing-id') || textOf(a).slice(0, 80)) : ''; };
+  const firstRowSig = doc => { const a = rowsOf(doc)[0]; return a ? (a.getAttribute('data-listing-id') || textOf(a).slice(0, 80)) : ''; };
 
   /* the listing rows loaded so far, in list order */
   function readRows(doc) {
     const money = t => (SK.profit ? SK.profit.parseMoney(t) : null);
     const out = [];
     const seen = new Set();
-    for (const a of doc.querySelectorAll(ROWS)) {
+    for (const a of rowsOf(doc)) {
       if (seen.has(a)) continue;
       seen.add(a);
       /* no ID shown (signed out): a stand-in, unique on this page only */

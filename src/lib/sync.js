@@ -45,8 +45,15 @@ export async function pull(db, old, meId, opts = {}) {
     const a = splitFp(before[spec.name]);
     const b = splitFp(now);
     const incremental = !full && spec.ts && a.max && before[spec.name] !== undefined && b.count >= a.count;
-    jobs.push(db.select(spec.table, spec.select || '*', incremental ? { gt: [spec.ts, a.max] } : null)
-      .then(rows => ({ spec, rows: rows || [], incremental })));
+    /* "newest | count" misses a row deleted while another was added: where
+     * rows get deleted (spec.idCol), the ids that still exist come along, so
+     * an incremental pull drops the deleted ones too */
+    const rows = db.select(spec.table, spec.select || '*', incremental ? { gt: [spec.ts, a.max] } : null);
+    const ids = incremental && spec.idCol
+      ? db.select(spec.table, spec.idCol, null).then(list => new Set((list || []).map(x => String(x[spec.idCol]))))
+      : Promise.resolve(null);
+    jobs.push(Promise.all([rows, ids])
+      .then(([rows, keep]) => ({ spec, rows: rows || [], incremental, keep })));
   }
   if (full || before.profiles !== status.profiles) {
     jobs.push(db.select('members', 'user_id,email', null).then(rows => ({ members: rows || [] })));
@@ -78,6 +85,7 @@ export async function pull(db, old, meId, opts = {}) {
     changed = true;
     if (r.spec.replace) { r.spec.replace(m, r.rows); continue; }
     if (!r.incremental) r.spec.clear(m);
+    else if (r.keep) for (const k of Object.keys(m[r.spec.field])) if (!r.keep.has(k)) delete m[r.spec.field][k];
     for (const row of r.rows) r.spec.put(m, row);
   }
   prune(m);

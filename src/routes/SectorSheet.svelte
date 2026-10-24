@@ -18,7 +18,8 @@
   const s = $derived(ev ? ev.sectors.find(x => x.id === String(sectorId)) : null);
   const scan = $derived(((store.scans || {})[eventKey] || {})[sectorId] || null);
   const sold = $derived(!!(s && s.meta && s.meta.status === 'soldout'));
-  const price = $derived(s && s.summary && s.summary.price);
+  /* a sector the site removed keeps the price it had when it went */
+  const price = $derived((s && s.summary && s.summary.price) || (s && s.meta && s.meta.price) || null);
   const mine = $derived(v ? v.requests.filter(r => r.eventKey === eventKey && String(r.sec) === String(sectorId)) : []);
   const myListings = $derived(v ? v.listings.filter(l => l.eventKey === eventKey && String(l.sectorId) === String(sectorId)) : []);
   const team = $derived(v ? v.teamListings.filter(t => t.eventKey === eventKey && String(t.sectorId) === String(sectorId))
@@ -143,7 +144,7 @@
       <div class="tile"><b class="num">{s.summary ? s.summary.longest ?? '—' : '—'}</b><span>longest block</span></div>
     </div>
     <p class="muted small center">
-      {#if sold}<b class="bad">{ev.siteLabel} says sold out · </b>{/if}
+      {#if sold}<b class="bad">{s.meta.gone ? `Sold out · ${ev.siteLabel} removed it ${ago(s.meta.gone)}` : `${ev.siteLabel} says sold out`} · </b>{/if}
       {s.summary ? `Read ${ago(s.summary.at)}` : 'No PC has read this sector yet.'}
       {#if price} · {price.min && price.min !== price.max ? `${money(price.min, price.currency)}–` : ''}{money(price.max, price.currency)} on {ev.siteLabel}{/if}
     </p>

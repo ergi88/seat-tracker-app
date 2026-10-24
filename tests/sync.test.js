@@ -55,6 +55,21 @@ test('fewer rows than before (a delete) reloads the table whole', async () => {
   assert.deepEqual(Object.keys(b.mirror.events), ['ebileta:2']);
 });
 
+test('a row deleted while another was added (same count) is dropped too', async () => {
+  const req = (id, at) => ({ id, user_id: 'me', event_key: 'ebileta:1', sec: '1', qty: 2, updated_at: at });
+  const tables = { events: [ev('ebileta:1', 1, '2026-10-01T00:00:00Z')], requests: [req('r1', '2026-10-01T00:00:00Z'), req('r2', '2026-10-01T01:00:00Z')], devices: [], members: [], alerts: [] };
+  const db = fakeDb(tables, { events: '2026-10-01T00:00:00Z|1', requests: '2026-10-01T01:00:00Z|2', alerts: 0 });
+  const a = await pull(db, null, 'me');
+  assert.deepEqual(Object.keys(a.mirror.requests).sort(), ['r1', 'r2']);
+  /* r1 deleted on another device, r3 added: still two rows, a newer max */
+  tables.requests = [req('r2', '2026-10-01T01:00:00Z'), req('r3', '2026-10-02T00:00:00Z')];
+  db.status.requests = '2026-10-02T00:00:00Z|2';
+  db.calls.length = 0;
+  const b = await pull(db, a.mirror, 'me');
+  assert.deepEqual(Object.keys(b.mirror.requests).sort(), ['r2', 'r3']);
+  assert.ok(db.calls.some(c => c.table === 'requests' && c.filter && c.filter.gt), 'still only the newer rows, plus the ids');
+});
+
 test('new alerts are reported once, and only after the first pull', async () => {
   const tables = { devices: [], members: [], alerts: [{ id: 5, user_id: 'me', type: 'low', title: 'Running low', message: 'x', created_at: '2026-10-01T00:00:00Z' }] };
   const db = fakeDb(tables, { alerts: 5 });

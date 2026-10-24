@@ -18,6 +18,10 @@
  *   sectorUrl(event, sector)     -> url of one sector, or null
  *   aliasSector(input)           -> optional rewrite of a typed sector name
  *   scanAllFilter(sector)        -> optional, false = skip in "scan all"
+ *   keepSectors(prev, fresh, now)-> optional: the sector list to store when a
+ *                                   load returns `fresh`, keeping ones the site
+ *                                   dropped (meta.gone); without it, fresh wins
+ *   isGone(sector)               -> optional: a kept sector the site dropped
  *   sectorHint(sector, event)    -> optional short text for autocomplete
  *   currency(event)              -> optional currency sign for prices
  *
