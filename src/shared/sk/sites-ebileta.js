@@ -236,7 +236,10 @@
       return shape && !(s.meta && s.meta.shape) ? Object.assign({}, s, { meta: Object.assign({}, s.meta, { shape }) }) : s;
     });
     const listed = new Set(fresh.map(s => String(s.id)));
-    const kept = (prev || []).filter(s => !listed.has(String(s.id))).map(s => {
+    /* a sector saved by hand from viagogo, before its real id was known,
+     * gives way to the real one as soon as the page lists it */
+    const codes = new Set(fresh.map(s => SK.util.normKey(s.code)));
+    const kept = (prev || []).filter(s => !listed.has(String(s.id)) && !(isGuessed(s) && codes.has(SK.util.normKey(s.code)))).map(s => {
       const meta = Object.assign({}, s.meta, { status: 'soldout' });
       if (!meta.gone) meta.gone = now || Date.now();
       return Object.assign({}, s, { meta });
@@ -245,6 +248,33 @@
   }
 
   const isGone = sector => !!(sector && sector.meta && sector.meta.gone);
+
+  /* A removed sector saved by hand from the viagogo drawer when no other
+   * event in the stadium knew its id: it has a stand-in id, no seat page,
+   * and is never scanned. */
+  const GUESSED = 'vg:';
+  const isGuessed = sector => !!sector && String(sector.id).startsWith(GUESSED);
+  const guessedId = code => GUESSED + SK.util.normKey(code).toUpperCase();
+
+  /* "N106", "Section n 106", "N-106" -> "N106": Air Albania's codes as
+   * eBileta writes them; anything else as it is, trimmed */
+  function stadiumCode(label) {
+    const raw = String(label || '').replace(/^\s*(?:section|sector|tribuna|block)\s+/i, '').trim();
+    const m = /^([NESVW])\s*-?\s*(\d{3})$/i.exec(raw);
+    return m ? m[1].toUpperCase() + m[2] : raw.toUpperCase();
+  }
+
+  /* Air Albania's stands, for the viagogo drawer's filter: N, E, S, V and W
+   * by the code's letter, and the corners as a group of their own (a corner
+   * is in no stand). -> 'N' | 'E' | 'S' | 'V' | 'W' | 'corner' | '' */
+  const STANDS = ['N', 'E', 'S', 'V', 'W'];
+  const CORNERS = new Set(['N106', 'N206', 'N207', 'E101', 'E201', 'E202', 'E210', 'E109', 'E211', 'S201', 'S101', 'S202']);
+  function standOf(label) {
+    const code = stadiumCode(label);
+    if (CORNERS.has(code)) return 'corner';
+    const m = /^([NESVW])\d{3}$/.exec(code);
+    return m ? m[1] : '';
+  }
 
   const opts = { credentials: 'include' };   // some events need the logged-in session
 
@@ -285,13 +315,19 @@
 
     sectorUrl(ev, sector) {
       const m = sector && sector.meta;
-      return m && m.idSM ? seatPageUrl({ id: sector.id, idSM: m.idSM, tipoM: m.tipoM }, host.origin) : null;
+      return m && m.idSM && !isGuessed(sector) ? seatPageUrl({ id: sector.id, idSM: m.idSM, tipoM: m.tipoM }, host.origin) : null;
     },
 
     scanAllFilter(sector) { return !(sector.meta && sector.meta.status === 'soldout'); },
 
     keepSectors,
     isGone,
+
+    /* viagogo writes "Section E106" or "Section E 106" for sector E106 */
+    aliasSector(input) {
+      const code = stadiumCode(input);
+      return /^[NESVW]\d{3}$/.test(code) ? code : input;
+    },
 
     sectorHint(sector) {
       const st = sector.meta && sector.meta.status;
@@ -372,7 +408,7 @@
     }
   });
 
-  SK.ebileta = { ORIGIN, HOSTS, hostOf, isEbileta, eventPageUrl, idSMOf, idSMIn, splitHeading, STATUS_LABELS, shortCode, parseSections, parseShapes, cleanPoints, parseSeats, parsePrices, parseEventList, seatPageUrl, sectorPageUrl, toSector, keepSectors, isGone };
+  SK.ebileta = { ORIGIN, HOSTS, hostOf, isEbileta, eventPageUrl, idSMOf, idSMIn, splitHeading, STATUS_LABELS, shortCode, parseSections, parseShapes, cleanPoints, parseSeats, parsePrices, parseEventList, seatPageUrl, sectorPageUrl, toSector, keepSectors, isGone, isGuessed, guessedId, stadiumCode, STANDS, CORNERS, standOf };
 
   if (typeof module === 'object' && module.exports) module.exports = SK;
 })(globalThis);

@@ -24,7 +24,7 @@ const MANIFEST = join(TARGET, 'manifest.json');
 /* load order matters: util first, registry before the site adapters */
 export const FILES = [
   'core/config.js', 'core/util.js', 'core/rules.js', 'core/registry.js', 'core/settings.js',
-  'core/profit.js', 'core/viagogo.js', 'core/team.js', 'core/sales.js',
+  'core/profit.js', 'core/viagogo.js', 'core/team.js', 'core/sales.js', 'core/lastsales.js',
   'sites/ebileta.js', 'sites/efinity.js', 'sites/posttick.js'
 ];
 

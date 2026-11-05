@@ -4,6 +4,7 @@
   import RequestCard from '../ui/RequestCard.svelte';
   import Banners from '../ui/Banners.svelte';
   import DateTile from '../ui/DateTile.svelte';
+  import LastSales from '../ui/LastSales.svelte';
   import { store } from '../lib/store.svelte.js';
   import { router, href } from '../lib/router.svelte.js';
   import { freshness, clock, ago, fromToday } from '../lib/fmt.js';
@@ -24,6 +25,9 @@
     }
     return out;
   });
+  /* what viagogo's "just sold" toast showed in the last two days, any event */
+  const RECENT_MS = 48 * 3600 * 1000;
+  const justSold = $derived(v ? (v.lastSales || []).filter(s => Date.now() - s.firstSeen < RECENT_MS) : []);
   const soon = t => t !== null && /today|tomorrow/.test(fromToday(t));
   const past = t => t !== null && /ago|yesterday/.test(fromToday(t));
 </script>
@@ -95,7 +99,14 @@
           </a>
         {/each}
       </div>
-    {:else}
+    {/if}
+
+    {#if justSold.length}
+      <h2 class="section-title">Just sold on viagogo · {justSold.length}</h2>
+      <LastSales sales={justSold} showEvent limit={8} />
+    {/if}
+
+    {#if !byEvent.length}
       <div class="empty">
         <div class="big">🎟️</div>
         <p>No open requests.</p>

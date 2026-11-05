@@ -20,13 +20,19 @@
   const HOST = /(^|\.)viagogo\.com$/i;
   const PAGE = /^\/secure\/pipeline\/sell\/confirmed/i;
 
+  /* viagogo may put a locale in front of every path: /ww/Secure/…,
+   * /ww/listings, /en-gb/sales. Pages are matched on what follows it. */
+  const LOCALE = /^\/[a-z]{2}(?:-[a-z]{2})?(?=\/)/i;
+  const localeOf = path => (LOCALE.exec(path || '') || [''])[0];
+  const pagePath = path => String(path || '').replace(LOCALE, '');
+
   /* the step of selling where the price is set: Secure/Pipeline/Sell/PriceDetails… */
   function isPricePage(loc) {
-    return !!loc && HOST.test(loc.hostname || '') && /^\/secure\/pipeline\/sell\/pricedetails/i.test(loc.pathname || '');
+    return !!loc && HOST.test(loc.hostname || '') && /^\/secure\/pipeline\/sell\/pricedetails/i.test(pagePath(loc.pathname));
   }
 
   function isConfirmedPage(loc) {
-    return !!loc && HOST.test(loc.hostname || '') && PAGE.test(loc.pathname || '');
+    return !!loc && HOST.test(loc.hostname || '') && PAGE.test(pagePath(loc.pathname));
   }
 
   /* ---------------- text ------------------------------------------ */
@@ -292,7 +298,7 @@
   /* ---------------- my.viagogo.com/listings ------------------------- */
 
   function isListingsPage(loc) {
-    return !!loc && /^my\.viagogo\.com$/i.test(loc.hostname || '') && /^\/listings/i.test(loc.pathname || '');
+    return !!loc && /^my\.viagogo\.com$/i.test(loc.hostname || '') && /^\/listings/i.test(pagePath(loc.pathname));
   }
 
   /* Every listing, in every state, with no search narrowing it: what a sweep
@@ -303,7 +309,7 @@
 
   function sweepUrl(loc) {
     const u = new URL((loc && loc.href) || 'https://my.viagogo.com/listings/');
-    u.pathname = '/listings/';
+    u.pathname = localeOf(u.pathname) + '/listings/';
     u.searchParams.delete('search');
     u.searchParams.set('activeTab', SWEEP_TABS);
     u.hash = '';
@@ -776,7 +782,7 @@
     paginationOf, currentPage, arrowDead, sweepUrl, sweepReady, SWEEP_TABS,
     isConfirmedPage, readListings, parseCard, parseDetails, readSellDetails, parseWhen, titleWords,
     listingKey, sectionKey, scoreEvent, pickEvent, sectorFor,
-    listingsApiUrl, apiList, apiTotal, listingFromApi, API_STATUSES
+    listingsApiUrl, apiList, apiTotal, listingFromApi, API_STATUSES, localeOf, pagePath
   };
 
   if (typeof module === 'object' && module.exports) module.exports = SK;

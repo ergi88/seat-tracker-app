@@ -22,7 +22,8 @@
   const SK = root.SK = root.SK || {};
 
   function isSalesPage(loc) {
-    return !!loc && /^my\.viagogo\.com$/i.test(loc.hostname || '') && /^\/sales/i.test(loc.pathname || '');
+    return !!loc && /^my\.viagogo\.com$/i.test(loc.hostname || '')
+      && /^(?:\/[a-z]{2}(?:-[a-z]{2})?(?=\/))?\/sales/i.test(loc.pathname || '');   // after a locale: /ww/sales
   }
 
   /* newest sale first: what lets a scan stop at the sales it already has */

@@ -377,6 +377,40 @@ export function buildView(m, me, opts = {}) {
   }).sort((a, b) => byNearest(now)(a, b) || a.num - b.num);
   for (const ev of events) ev.tone = tone(ev.worst);
 
+  /* the team's last sales from viagogo's "just sold" toast, newest first. An
+   * event's are the ones matched to it when saved, or sold from the viagogo
+   * event one of your listings for it is on. */
+  const vgIdsOf = {};
+  for (const l of Object.values(m.listings)) if (l.eventKey && l.vgEventId) (vgIdsOf[l.eventKey] = vgIdsOf[l.eventKey] || new Set()).add(l.vgEventId);
+  const lastSales = Object.values(m.lastSales || {}).map(s => {
+    const ev = s.eventKey ? m.events[s.eventKey] : null;
+    const sec = ev && s.sectorId ? sectorOf(ev, s.sectorId) : null;
+    return Object.assign({}, s, {
+      eventNum: ev ? ev.num : null, eventTitle: ev ? SK.util.eventInfo(ev).name : '', code: sec ? sec.code : ''
+    });
+  }).sort((a, b) => b.firstSeen - a.firstSeen);
+  /* the viagogo event each tracked one is sold on, for its Sell button: the
+   * one most of the team's listings, sales and last sales for it point at */
+  const vgVotes = {};
+  const vote = (eventKey, id) => {
+    const v = String(id || '').replace(/\D/g, '');
+    if (!eventKey || !v) return;
+    const t = (vgVotes[eventKey] = vgVotes[eventKey] || {});
+    t[v] = (t[v] || 0) + 1;
+  };
+  for (const l of Object.values(m.listings)) vote(l.eventKey, l.vgEventId);
+  for (const l of Object.values(m.teamPrices || {})) vote(l.eventKey, l.vgEventId);
+  for (const s of Object.values(m.sales || {})) vote(s.eventKey, s.vgEventId);
+  for (const s of Object.values(m.lastSales || {})) vote(s.eventKey, s.vgEventId);
+
+  for (const ev of events) {
+    const ids = vgIdsOf[ev.key];
+    ev.lastSales = lastSales.filter(s => s.eventKey === ev.key || (ids && s.vgEventId && ids.has(s.vgEventId)));
+    const votes = Object.entries(vgVotes[ev.key] || {}).sort((a, b) => b[1] - a[1]);
+    ev.vgEventId = votes.length ? votes[0][0] : '';
+    ev.sellUrl = ev.vgEventId ? SK.lastSales.sellUrl(ev.vgEventId) : '';
+  }
+
   const listings = Object.values(m.listings).filter(l => l.userId === me && !hiddenListings[l.id]).map(l => {
     const r = allRequests.find(x => x.userId === me && x.listing === l.id) || null;
     const ev = m.events[r ? r.eventKey : l.eventKey] || null;
@@ -436,7 +470,7 @@ export function buildView(m, me, opts = {}) {
     .map(t => Object.assign({}, t, { owner: ownerName(t.userId) }));
 
   return {
-    me, settings, events, requests, listings, sales, devices, team, teamListings, accounts, purchases,
+    me, settings, events, requests, listings, sales, lastSales, devices, team, teamListings, accounts, purchases,
     open, attention,
     pcsOnline: devices.filter(d => d.online),
     snoozeUntil: (m.profiles[me] || {}).snoozeUntil || 0,

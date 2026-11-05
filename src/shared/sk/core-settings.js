@@ -54,6 +54,11 @@
      * and the ones the site calls sold out. It is how a sector that was empty
      * and is now on sale gets noticed. 0 = off. */
     sweepMin: 30,
+    /* viagogo's "just sold" toast, read off every event's sell page in a
+     * minimized window: each event at most this often, 0 = off. Team. */
+    lastSaleScanMin: 60,
+    /* this PC takes part in that scan (one signed out of viagogo should not) */
+    lastSaleScan: true,
 
     /* notifications */
     notify: {},                 // { <type>: { desktop, phone } }, filled from NOTIFY_TYPES
@@ -118,6 +123,8 @@
       defaultOpts: num(s.defaultOpts, 3, 0, 9999),
       eventCheckMin: num(s.eventCheckMin, 30, 0, 1440),
       sweepMin: num(s.sweepMin, 30, 0, 1440),
+      lastSaleScanMin: num(s.lastSaleScanMin, 60, 0, 1440),
+      lastSaleScan: s.lastSaleScan !== false,
       cooldownMin: num(s.cooldownMin, 10, 0, 1440),
       repeatWarnMin: num(s.repeatWarnMin, 15, 0, 1440),
       confirmGone: s.confirmGone !== false,
@@ -185,7 +192,7 @@
 
   /* pages that show the sidebar but are not ticket sites: nothing is scanned there */
   function helperPages() {
-    return [{ id: 'viagogo', label: 'viagogo', pages: [{ key: 'confirmed', label: 'listing confirmed page' }, { key: 'listings', label: 'my listings page' }, { key: 'sales', label: 'my sales page' }, { key: 'price', label: 'setting a price (sell)' }, { key: 'event', label: 'event page drawer' }], badges: null }];
+    return [{ id: 'viagogo', label: 'viagogo', pages: [{ key: 'confirmed', label: 'listing confirmed page' }, { key: 'listings', label: 'my listings page' }, { key: 'sales', label: 'my sales page' }, { key: 'price', label: 'setting a price (sell)' }, { key: 'sell', label: 'selling: last sales' }, { key: 'event', label: 'event page drawer' }], badges: null }];
   }
 
   function notifyType(key) { return NOTIFY_TYPES.find(t => t.key === key); }
@@ -212,8 +219,8 @@
    *   team   - shared by everyone (how often events are scanned)
    *   device - this PC only (look and on-site panels)
    *   user   - each person (notifications, topics, defaults for new requests) */
-  const TEAM_KEYS = ['autoMin', 'eventCheckMin', 'sweepMin', 'fxOverride', 'buyLimits', 'eventBuyLimits'];
-  const DEVICE_KEYS = ['theme', 'sidebarMode', 'panels', 'listSort', 'selectSeats', 'pcNotify'];
+  const TEAM_KEYS = ['autoMin', 'eventCheckMin', 'sweepMin', 'lastSaleScanMin', 'fxOverride', 'buyLimits', 'eventBuyLimits'];
+  const DEVICE_KEYS = ['theme', 'sidebarMode', 'panels', 'listSort', 'selectSeats', 'pcNotify', 'lastSaleScan'];
 
   function scopeOf(key) {
     if (TEAM_KEYS.includes(key)) return 'team';

@@ -5,12 +5,13 @@
     "core/util.js": "879c6cd5dc038cb18b26274350ad0b134fbc4eacb54d77e5bd0e70ade1bf029d",
     "core/rules.js": "86b78f28df61d2115167138ea93f5ab2b112274eed9d5193ee56dc04eef008c0",
     "core/registry.js": "2090e3186cd1e01d23c69b2c6d7d4c91be51968ca25a67f94a34984585d58fe4",
-    "core/settings.js": "d08c84793ea28ce46d395b2f8c9a2c020347d39ab36cbe59b8a5d6693276eeb2",
+    "core/settings.js": "2af303361b62bf27e052cf6f027c6175265b14c130e5459b98a5bff4072c4e74",
     "core/profit.js": "f1162e7da58220d64e120e4080a9286ca376fff72fd497cf3f7239b9af2aff04",
-    "core/viagogo.js": "962a8f5686d832ae1ede80726d2ac246522863cd9602f3e000b6be12ec4d306f",
+    "core/viagogo.js": "82e9a4478cba22bd2d29d32fd1581759763f12aed579d368fdb0654d2e6f7cd0",
     "core/team.js": "cbd66f06310ebca395986f1af87f8b02b9e33119c8a4de3e0c975e9cabe94a21",
-    "core/sales.js": "be791f6efa24339c91a1a82f4caee9a6a196a30cf6043795ae4b1b874de51927",
-    "sites/ebileta.js": "b11d5fd0affe94d44028fe2523681895f376358139da494c75074b0f16d2a884",
+    "core/sales.js": "b995b5121fe816cc68eb1b28a64f69655dba28da0855c809024db7d0d8a7bb3b",
+    "core/lastsales.js": "6c8f967ca94b88c9fc7c8b558eb15dac5ccfe5f5fe2ad832d0ebe3e3442502c1",
+    "sites/ebileta.js": "f0f0582f1f67997a8d3445c13b87b746cf340b9b4e7947e00d7582ef8c93b8b5",
     "sites/efinity.js": "44c4752c02fc2fcfd6c271f999a29a480c42b48355f8d06f35d9df3a47e7e6b1",
     "sites/posttick.js": "4cdd008a424b556cae97d54e291c80a0a64e6ffe230a133f2693bbff7f2da60c"
   }

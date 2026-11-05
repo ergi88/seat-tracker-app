@@ -47,7 +47,8 @@ export const toSale = r => ({
 export const toTeamPrice = r => ({
   id: r.listing_id, userId: r.user_id, eventKey: r.event_key || null, sectorId: r.sector_id || null, section: r.section || '',
   row: r.row_label || '', status: r.status || '', currency: r.currency || '', price: numOr(r.price), tickets: numOr(r.tickets),
-  seenAt: time(r.seen_at)
+  seenAt: time(r.seen_at),
+  vgEventId: r.vg_event_id || '', title: r.title || '', when: r.event_when || ''
 });
 
 export const toState = r => ({
@@ -72,6 +73,14 @@ export const toPurchase = r => ({
 
 export const toSectorPrice = r => ({
   amount: Number(r.amount), currency: r.currency || 'ALL', updatedBy: r.updated_by || null, updatedAt: time(r.updated_at)
+});
+
+/* viagogo's "just sold" toast, as a sell page showed it (the team's) */
+export const toLastSale = r => ({
+  id: String(r.id), vgKey: r.vg_key || '', vgEventId: r.vg_event_id || '', eventKey: r.event_key || null, sectorId: r.sector_id || null,
+  title: r.title || '', when: r.event_when || '', section: r.section || '', row: r.row_label || '',
+  tickets: numOr(r.tickets), price: numOr(r.price), currency: r.currency || '',
+  firstSeen: time(r.first_seen), lastSeen: time(r.last_seen), seenCount: Number(r.seen_count) || 1, seenBy: r.seen_by || ''
 });
 
 export const toDevice = r => ({ id: r.id, userId: r.user_id, name: r.name || '', lastSeen: time(r.last_seen), version: r.version || '' });
@@ -113,7 +122,10 @@ export const SPECS = [
   { name: 'purchases', table: 'purchases', ts: 'updated_at', optional: true, clear: m => { m.purchases = {}; },
     put: (m, r) => { m.purchases[r.id] = toPurchase(r); } },
   { name: 'prices', table: 'sector_prices', ts: 'updated_at', optional: true, clear: m => { m.sectorPrices = {}; },
-    put: (m, r) => { (m.sectorPrices[r.event_key] = m.sectorPrices[r.event_key] || {})[r.sector_id] = toSectorPrice(r); } }
+    put: (m, r) => { (m.sectorPrices[r.event_key] = m.sectorPrices[r.event_key] || {})[r.sector_id] = toSectorPrice(r); } },
+  /* optional too: a database without the last-sales table syncs everything else */
+  { name: 'lastSales', table: 'vg_last_sales', ts: 'updated_at', optional: true, clear: m => { m.lastSales = {}; },
+    put: (m, r) => { (m.lastSales = m.lastSales || {})[String(r.id)] = toLastSale(r); } }
 ];
 
 export const specOf = name => SPECS.find(s => s.name === name);
@@ -121,7 +133,7 @@ export const specOf = name => SPECS.find(s => s.name === name);
 export function emptyMirror() {
   return {
     team: {}, profiles: {}, events: {}, requests: {}, state: {}, scanMeta: {}, health: {}, leases: {},
-    listings: {}, sales: {}, teamPrices: {}, fx: {}, accounts: {}, purchases: {}, sectorPrices: {}, members: [], devices: [], alerts: [],
+    listings: {}, sales: {}, teamPrices: {}, fx: {}, accounts: {}, purchases: {}, sectorPrices: {}, lastSales: {}, members: [], devices: [], alerts: [],
     fingerprints: {}, serverOffset: 0, pulledAt: 0
   };
 }

@@ -6,6 +6,7 @@
   import StadiumMap from '../ui/StadiumMap.svelte';
   import DateTile from '../ui/DateTile.svelte';
   import BuysCard from '../ui/BuysCard.svelte';
+  import LastSales from '../ui/LastSales.svelte';
   import { venueFor } from '../lib/venues.js';
   import { SK } from '../lib/sk.js';
   import { store } from '../lib/store.svelte.js';
@@ -105,6 +106,7 @@
     </div>
 
     <div class="chips">
+      {#if ev.sellUrl}<a class="chip sell" href={ev.sellUrl} target="_blank" rel="noopener" title="viagogo's own Sell page for this event">Sell on viagogo <Icon name="external" size={14} /></a>{/if}
       <span class="chip"><Icon name="refresh" size={14} /> {ev.lastScanAt ? `scanned ${ago(ev.lastScanAt)}` : 'never scanned'}{ev.lastScanBy ? ` by ${ev.lastScanBy}` : ''}</span>
       <span class="chip">{ev.autoEvery ? `auto-check every ${ev.autoEvery} min` : 'auto-check off'}</span>
       {#if ev.scanner}<span class="chip accent">{ev.scanner} is scanning</span>{/if}
@@ -123,7 +125,7 @@
 
     <div class="tab-anchor" bind:this={anchor}></div>
     <div class="tabs" bind:this={strip} role="tablist" aria-label="Event sections">
-      {#each [['requests', 'Requests', open.length], ['buy', 'Buy', ev.buys.total], ['sectors', 'Sectors', ev.sectors.length]] as [k, label, n] (k)}
+      {#each [['requests', 'Requests', open.length], ['buy', 'Buy', ev.buys.total], ['sectors', 'Sectors', ev.sectors.length], ['sold', 'Sold', ev.lastSales.length]] as [k, label, n] (k)}
         <button role="tab" aria-selected={tab === k} class:on={tab === k} onclick={() => pick(k)}>{label}{#if n}<span class="num">{n}</span>{/if}</button>
       {/each}
     </div>
@@ -161,6 +163,13 @@
           <Icon name="chev" size={18} />
         </button>
       </div>
+    {:else if tab === 'sold'}
+      <!-- viagogo's "just sold" toasts for this event, saved by the extension on its sell pages -->
+      <h2 class="section-title">Last sales on viagogo{ev.lastSales.length ? ` · ${ev.lastSales.length}` : ''}</h2>
+      <LastSales sales={ev.lastSales} />
+      {#if ev.lastSales.length}
+        <p class="muted small sold-note">The time is when the toast was first read on a sell page, the price is the one it showed.</p>
+      {/if}
     {:else}
       <div class="sectors-tab">
         <input class="input" type="search" placeholder="Find a sector (E106, tribuna…)" bind:value={q} enterkeyhint="search" />
@@ -215,10 +224,12 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
   .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 99px; background: var(--panel); font-size: 13px; color: var(--muted); box-shadow: 0 1px 0 var(--line); }
   .chip.accent { background: var(--accent-soft); color: var(--accent); }
+  .chip.sell { background: var(--accent); color: var(--bg); font-weight: 650; box-shadow: none; }
+  .chip.sell:active { filter: brightness(.92); }
   /* the tabs under the map: stuck under the top bar while the page scrolls */
   .tabs {
     position: sticky; top: calc(48px + var(--safe-t)); z-index: 4;
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px;
     margin: 16px calc(-16px - var(--safe-r)) 12px calc(-16px - var(--safe-l));
     padding: 8px calc(16px + var(--safe-r)) 8px calc(16px + var(--safe-l));
     background: var(--bar); border-bottom: 1px solid var(--line);
@@ -232,6 +243,13 @@
   .tabs button .num { font-size: 12.5px; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: var(--panel); color: var(--muted); }
   .tabs button.on { background: var(--ink); color: var(--bg); }
   .tabs button.on .num { background: var(--bg); color: var(--ink); }
+  /* four tabs on a narrow phone: smaller, and the counts go first */
+  @media (max-width: 420px) {
+    .tabs button { font-size: 14px; gap: 4px; }
+    .tabs button .num { padding: 1px 5px; font-size: 11.5px; }
+  }
+  @media (max-width: 370px) { .tabs button .num { display: none; } }
+  .sold-note { margin-top: 8px; }
   .sectors-tab { display: grid; }
   .filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 0 10px; padding-bottom: 2px; }
   .filters::-webkit-scrollbar { display: none; }

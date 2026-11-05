@@ -184,12 +184,12 @@ export function demoMirror(now = Date.now()) {
   m.leases = { 'scan:ebileta:2160': { deviceId: 'pc1', userId: ME, expiresAt: now + 30000 } };
   m.listings = {
     20000000001: {
-      id: '20000000001', userId: ME, eventKey: 'ebileta:2160', sectorId: '12', vgEventId: '1', title: 'Albania vs Serbia', when: 'Sat 14 Nov',
+      id: '20000000001', userId: ME, eventKey: 'ebileta:2160', sectorId: '12', vgEventId: '161613530', title: 'Albania vs Serbia', when: 'Sat 14 Nov',
       section: 'E106', row: '', status: 'Active', currency: 'USD', price: 84, payout: 453.6, tickets: 6,
       performance: '', history: [], seenAt: now - 20 * min, seenBy: 'pc1', venue: 'Air Albania', track: 'auto', lastSweepAt: 0, buyPrice: null, buyCurrency: 'ALL'
     },
     20000000002: {
-      id: '20000000002', userId: ME, eventKey: 'ebileta:2160', sectorId: '13', vgEventId: '1', title: 'Albania vs Serbia', when: 'Sat 14 Nov',
+      id: '20000000002', userId: ME, eventKey: 'ebileta:2160', sectorId: '13', vgEventId: '161613530', title: 'Albania vs Serbia', when: 'Sat 14 Nov',
       section: 'W105', row: '', status: 'Active', currency: 'USD', price: 61, payout: 158.6, tickets: 2,
       performance: '', history: [], seenAt: now - 20 * min, seenBy: 'pc1', venue: 'Air Albania', track: 'auto', lastSweepAt: 0, buyPrice: 4000, buyCurrency: 'ALL'
     }
@@ -198,8 +198,18 @@ export function demoMirror(now = Date.now()) {
     20000000003: { id: '20000000003', userId: MATE, eventKey: 'ebileta:2160', sectorId: '12', section: 'E106', row: '', status: 'Active', currency: 'USD', price: 79, tickets: 4, seenAt: now - 60 * min }
   };
   m.sales = {
-    s1: { id: 's1', userId: ME, eventKey: 'ebileta:2160', sectorId: '12', vgEventId: '1', listingId: null, title: 'Albania vs Serbia', when: 'Sat 14 Nov', venue: '', section: 'E106', row: '', tickets: 2, currency: 'USD', amount: 151.2, status: 'Complete', soldOn: day, buyPrice: null, buyCurrency: 'ALL', seenAt: now },
-    s2: { id: 's2', userId: ME, eventKey: 'ebileta:2160', sectorId: '11', vgEventId: '1', listingId: null, title: 'Albania vs Serbia', when: 'Sat 14 Nov', venue: '', section: 'E105', row: '', tickets: 4, currency: 'USD', amount: 260, status: 'Get Paid', soldOn: day, buyPrice: null, buyCurrency: 'ALL', seenAt: now }
+    s1: { id: 's1', userId: ME, eventKey: 'ebileta:2160', sectorId: '12', vgEventId: '161613530', listingId: null, title: 'Albania vs Serbia', when: 'Sat 14 Nov', venue: '', section: 'E106', row: '', tickets: 2, currency: 'USD', amount: 151.2, status: 'Complete', soldOn: day, buyPrice: null, buyCurrency: 'ALL', seenAt: now },
+    s2: { id: 's2', userId: ME, eventKey: 'ebileta:2160', sectorId: '11', vgEventId: '161613530', listingId: null, title: 'Albania vs Serbia', when: 'Sat 14 Nov', venue: '', section: 'E105', row: '', tickets: 4, currency: 'USD', amount: 260, status: 'Get Paid', soldOn: day, buyPrice: null, buyCurrency: 'ALL', seenAt: now }
+  };
+  /* viagogo's "just sold" toasts, as the extension saved them */
+  const ls = (id, sectorId, section, tickets, price, ago, seen) => ({
+    id, vgKey: 'albaniavsserbia', vgEventId: '161613530', eventKey: sectorId ? 'ebileta:2160' : null, sectorId, title: 'Albania vs Serbia', when: 'Sat 14 Nov',
+    section, row: '', tickets, price, currency: 'USD', firstSeen: now - ago, lastSeen: now - ago + (seen - 1) * 15 * min, seenCount: seen, seenBy: 'Office PC'
+  });
+  m.lastSales = {
+    l3: ls('l3', '12', 'E106', 2, 82.24, 9 * min, 2),
+    l2: ls('l2', '13', 'W105', 4, 64.5, 70 * min, 1),
+    l1: ls('l1', '11', 'E105', 1, 91, 5 * 3600000, 3)
   };
   m.fx = { [day]: { USD: 83.36, EUR: 96.5, RSD: 0.82, GBP: 111.2 } };
   m.devices = [
