@@ -168,7 +168,7 @@
       <h2 class="section-title">Last sales on viagogo{ev.lastSales.length ? ` · ${ev.lastSales.length}` : ''}</h2>
       <LastSales sales={ev.lastSales} />
       {#if ev.lastSales.length}
-        <p class="muted small sold-note">The time is when the toast was first read on a sell page, the price is the one it showed.</p>
+        <p class="muted small sold-note">The time is when the sale was first read. The price is the one viagogo showed for the sale, with what each ticket comes to under it.</p>
       {/if}
     {:else}
       <div class="sectors-tab">

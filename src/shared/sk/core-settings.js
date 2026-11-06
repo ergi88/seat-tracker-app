@@ -54,9 +54,10 @@
      * and the ones the site calls sold out. It is how a sector that was empty
      * and is now on sale gets noticed. 0 = off. */
     sweepMin: 30,
-    /* viagogo's "just sold" toast, read off every event's sell page in a
-     * minimized window: each event at most this often, 0 = off. Team. */
-    lastSaleScanMin: 60,
+    /* viagogo's "just sold" toast for every event, asked of viagogo directly
+     * (the request its sell page makes), no tab or window: each event at
+     * most this often, 0 = off. Team. */
+    lastSaleScanMin: 30,
     /* this PC takes part in that scan (one signed out of viagogo should not) */
     lastSaleScan: true,
 
@@ -123,7 +124,7 @@
       defaultOpts: num(s.defaultOpts, 3, 0, 9999),
       eventCheckMin: num(s.eventCheckMin, 30, 0, 1440),
       sweepMin: num(s.sweepMin, 30, 0, 1440),
-      lastSaleScanMin: num(s.lastSaleScanMin, 60, 0, 1440),
+      lastSaleScanMin: num(s.lastSaleScanMin, 30, 0, 1440),
       lastSaleScan: s.lastSaleScan !== false,
       cooldownMin: num(s.cooldownMin, 10, 0, 1440),
       repeatWarnMin: num(s.repeatWarnMin, 15, 0, 1440),

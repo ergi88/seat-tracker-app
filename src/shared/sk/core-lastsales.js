@@ -9,9 +9,9 @@
  *
  * It has no time and no ID, so a sale is told apart from the one before
  * only by what it shows: the same section, tickets and price as the last
- * one saved for that event is the same sale seen again (its last_seen
- * moves on); anything else is a new sale. The class names are generated,
- * so the toast is read by its text alone.
+ * one saved for that event is the same sale, and is skipped; anything else
+ * is a new sale, saved with the time it was first read. The class names
+ * are generated, so the toast is read by its text alone.
  *
  * Pure: used by the sell-page watcher, the service worker, the drawers
  * and (copied by sync-core) the phone app.
@@ -192,7 +192,9 @@
       tickets: Math.round(tickets), price: Math.round(price * 100) / 100,
       currency: /^[A-Z]{3}$/.test(cur) ? cur : '',
       when: String(x.when || '').trim().slice(0, 80),
-      vgEventId: /^\d{5,}$/.test(String(x.vgEventId || '')) ? String(x.vgEventId) : ''
+      vgEventId: /^\d{5,}$/.test(String(x.vgEventId || '')) ? String(x.vgEventId) : '',
+      /* the listing it sold from: only viagogo's own answer has it, the toast on the page does not */
+      listingId: /^\d{4,}$/.test(String(x.listingId || '')) ? String(x.listingId) : ''
     };
   }
 
@@ -206,8 +208,58 @@
     const key = sale.vgKey || vgKeyOf(sale.title);
     const latest = (saved || []).filter(s => (s.vgKey || vgKeyOf(s.title)) === key)
       .sort((a, b) => (b.firstSeen || 0) - (a.firstSeen || 0))[0] || null;
-    return { latest, same: !!latest && fingerprint(latest) === fingerprint(sale) };
+    /* two listings never make the same sale, whatever else they share */
+    const other = !!latest && !!latest.listingId && !!sale.listingId && String(latest.listingId) !== String(sale.listingId);
+    return { latest, same: !!latest && !other && fingerprint(latest) === fingerprint(sale) };
   }
+
+  /* The price split over the tickets: the toast's price is taken to be for
+   * all of them. -> { total, each } (each = null without a ticket count) */
+  function priceSplit(s) {
+    const total = Number(s && s.price);
+    const n = Number(s && s.tickets);
+    if (!(total > 0)) return { total: null, each: null };
+    return { total, each: n > 0 ? Math.round((total / n) * 100) / 100 : null };
+  }
+
+  /* "$100 | $25/pc"; one ticket is just "$21.75". fmt: (amount, currency) -> text */
+  function priceText(s, fmt) {
+    const { total, each } = priceSplit(s);
+    if (total === null) return '?';
+    const cur = (s && s.currency) || 'USD';
+    return Number(s.tickets) > 1 && each !== null ? `${fmt(total, cur)} | ${fmt(each, cur)}/pc` : fmt(total, cur);
+  }
+
+  /* Sales by the day they were first read (this computer's days), newest
+   * day first, each keeping its sales' order.
+   * -> [{ day: 'YYYY-MM-DD', at, sales, tickets }] */
+  function byDay(list) {
+    const out = [];
+    const index = new Map();
+    for (const s of list || []) {
+      const d = new Date(s.firstSeen || 0);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      let g = index.get(key);
+      if (!g) { g = { day: key, at: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(), sales: [], tickets: 0 }; index.set(key, g); out.push(g); }
+      g.sales.push(s);
+      g.tickets += Number(s.tickets) || 0;
+    }
+    return out.sort((a, b) => b.at - a.at);
+  }
+
+  const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  /* "Today · 6 Nov", "Yesterday · 5 Nov", "Tue 3 Nov" (a year only when it is not this one) */
+  function dayLabel(at, now) {
+    const d = new Date(at);
+    const t = new Date(now || Date.now());
+    const days = Math.round((new Date(t.getFullYear(), t.getMonth(), t.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+    const date = `${d.getDate()} ${MONTH_ABBR[d.getMonth()]}${d.getFullYear() !== t.getFullYear() ? ` ${d.getFullYear()}` : ''}`;
+    return days === 0 ? `Today · ${date}` : days === 1 ? `Yesterday · ${date}` : `${DAY_ABBR[d.getDay()]} ${date}`;
+  }
+
+  /* "Today · 6 Nov · 20 tickets · 5 sales" */
+  const dayLine = (g, now) => `${dayLabel(g.at, now)} · ${g.tickets} ticket${g.tickets === 1 ? '' : 's'} · ${g.sales.length} sale${g.sales.length === 1 ? '' : 's'}`;
 
   /* Is this sale one of `ev`'s? ev: { vgEventId?, eventKey?, title?, when? }.
    * The viagogo event ID first, then the tracked event, then the name (and the
@@ -289,7 +341,7 @@
     };
     for (const l of (src && src.listings) || []) add(l.vgEventId, l.title, l.when, l.eventKey, l.seenAt);
     for (const l of (src && src.teamPrices) || []) add(l.vgEventId, l.title, l.when, l.eventKey, l.seenAt);
-    for (const s of (src && src.lastSales) || []) add(s.vgEventId, s.title, s.when, s.eventKey, s.lastSeen);
+    for (const s of (src && src.lastSales) || []) add(s.vgEventId, s.title, s.when, s.eventKey, s.firstSeen);
     return [...out.values()].filter(x => !isPastWhen(x.when, t));
   }
 
@@ -303,16 +355,67 @@
       .sort((a, b) => ((h[a.vgEventId] || {}).at || 0) - ((h[b.vgEventId] || {}).at || 0))[0] || null;
   }
 
-  /* between two sell pages of the scan: 3 to 4 minutes */
-  const SCAN_GAP_MS = [180 * 1000, 240 * 1000];
+  /* ---------------- asking viagogo, with no page open ---------------- */
+
+  /* What the sell page itself asks for its toast (found 2026-11-06). It needs
+   * a sell session ID: the event number alone gets {}. */
+  function recentSoldUrl(sessionId) {
+    const id = String(sessionId || '').trim();
+    return /^[0-9a-f-]{20,}$/i.test(id) ? `https://sell.viagogo.com/Secure/Pipeline/Sell/GetRecentlySoldListingForEvent?ID=${id}` : '';
+  }
+
+  /* Its answer -> { title, section, tickets, price, currency, listingId } | null.
+   * {"listingId":14514628268,"quantity":1,"section":"N207","price":"$21.75","eventName":"…"}, or {} for none. */
+  function parseRecentSold(json) {
+    if (!json || typeof json !== 'object' || !json.listingId) return null;
+    const m = typeof json.price === 'number' ? { amount: json.price, currency: '' } : moneyOf(String(json.price || ''));
+    const out = {
+      title: String(json.eventName || '').trim(), section: String(json.section || '').trim(), row: '',
+      tickets: Number(json.quantity), price: m ? m.amount : null, currency: (m && m.currency) || '',
+      listingId: String(json.listingId)
+    };
+    return out.title && out.section && out.tickets > 0 && out.price > 0 ? out : null;
+  }
+
+  /* The sell sessions viagogo keeps in the browser (localStorage on
+   * sell.viagogo.com, PIPELINE_STATES_REF_STORAGE_KEY):
+   * {"161613530":{"pipelineStateId":"50e4a792-…","lastUpdated":1793949954985}, …},
+   * maybe wrapped in something. -> { <vgEventId>: { id, at } } */
+  const SESSION_KEY = 'PIPELINE_STATES_REF_STORAGE_KEY';
+  function sessionsFrom(raw) {
+    let data = raw;
+    if (typeof raw === 'string') { try { data = JSON.parse(raw); } catch (e) { return {}; } }
+    const out = {};
+    const walk = (o, depth) => {
+      if (!o || typeof o !== 'object' || depth > 4) return;
+      for (const [k, v] of Object.entries(o)) {
+        if (/^\d{5,}$/.test(k) && v && typeof v === 'object' && /^[0-9a-f-]{20,}$/i.test(String(v.pipelineStateId || ''))) {
+          const at = Number(v.lastUpdated) || 0;
+          if (!out[k] || out[k].at < at) out[k] = { id: String(v.pipelineStateId), at };
+        } else if (v && typeof v === 'object') walk(v, depth + 1);
+      }
+    };
+    walk(data, 0);
+    return out;
+  }
+
+  /* viagogo's bot wall (DataDome) answering instead of the data */
+  const BOT_TEXT = /captcha-delivery|datadome|automated \(bot\) activity|access temporarily restricted/i;
+  const isBotAnswer = (status, text) => status === 403 || status === 429 || BOT_TEXT.test(String(text || '').slice(0, 5000));
+
+  /* between two requests of the scan: 45 to 75 seconds */
+  const SCAN_GAP_MS = [45 * 1000, 75 * 1000];
   const scanGap = rand => Math.round(SCAN_GAP_MS[0] + (SCAN_GAP_MS[1] - SCAN_GAP_MS[0]) * (typeof rand === 'number' ? rand : Math.random()));
-  /* no event is visited more often than this, whatever the setting says */
-  const SCAN_MIN_EVERY = 30;
+  /* no event is asked about more often than this, whatever the setting says */
+  const SCAN_MIN_EVERY = 15;
+  /* a sell session older than this is renewed when it answers {} */
+  const SESSION_FRESH_MS = 24 * 3600 * 1000;
 
   SK.lastSales = {
     isSellPage, pipelineIdOf, eventIdIn, eventIdOnPage, vgKeyOf, parseToast, readToast, whenNear, isBlockPage,
-    clean, fingerprint, compare, sameEvent, forEvent, nextDelay, EVERY, DEFAULT_EVERY, MIN_GAP_MS, BLOCK_PAUSE_MS,
-    sellUrl, isLoginPage, isPastWhen, scanTargets, nextTarget, scanGap, SCAN_GAP_MS, SCAN_MIN_EVERY
+    clean, fingerprint, compare, sameEvent, forEvent, priceSplit, priceText, byDay, dayLabel, dayLine, nextDelay, EVERY, DEFAULT_EVERY, MIN_GAP_MS, BLOCK_PAUSE_MS,
+    sellUrl, isLoginPage, isPastWhen, scanTargets, nextTarget, scanGap, SCAN_GAP_MS, SCAN_MIN_EVERY,
+    recentSoldUrl, parseRecentSold, sessionsFrom, SESSION_KEY, isBotAnswer, SESSION_FRESH_MS
   };
 
   if (typeof module === 'object' && module.exports) module.exports = SK;
