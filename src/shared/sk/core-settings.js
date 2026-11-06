@@ -58,6 +58,10 @@
      * (the request its sell page makes), no tab or window: each event at
      * most this often, 0 = off. Team. */
     lastSaleScanMin: 30,
+    /* the team's own list for that scan: events added by hand (research),
+     * events left out, and an interval per event.
+     * { <vgEventId>: { mode: 'add' | 'off', every, title, when } } */
+    lastSaleEvents: {},
     /* this PC takes part in that scan (one signed out of viagogo should not) */
     lastSaleScan: true,
 
@@ -111,6 +115,21 @@
 
   function hm(v, dflt) { return SK.util.parseHM(v) === null ? dflt : String(v).trim().padStart(5, '0'); }
 
+  function lastSaleEventsOf(raw) {
+    const out = {};
+    for (const [id, x] of Object.entries(raw && typeof raw === 'object' ? raw : {})) {
+      if (!/^\d{5,}$/.test(id) || !x || typeof x !== 'object') continue;
+      const e = {};
+      if (x.mode === 'add' || x.mode === 'off') e.mode = x.mode;
+      if (Number(x.every) > 0) e.every = Math.min(1440, Math.round(Number(x.every)));
+      if (!e.mode && !e.every) continue;
+      if (x.title) e.title = String(x.title).slice(0, 200);
+      if (x.when) e.when = String(x.when).slice(0, 80);
+      out[id] = e;
+    }
+    return out;
+  }
+
   function normalize(raw) {
     const s = Object.assign({}, DEFAULTS, raw || {});
     const out = {
@@ -126,6 +145,7 @@
       sweepMin: num(s.sweepMin, 30, 0, 1440),
       lastSaleScanMin: num(s.lastSaleScanMin, 30, 0, 1440),
       lastSaleScan: s.lastSaleScan !== false,
+      lastSaleEvents: lastSaleEventsOf(s.lastSaleEvents),
       cooldownMin: num(s.cooldownMin, 10, 0, 1440),
       repeatWarnMin: num(s.repeatWarnMin, 15, 0, 1440),
       confirmGone: s.confirmGone !== false,
@@ -220,7 +240,7 @@
    *   team   - shared by everyone (how often events are scanned)
    *   device - this PC only (look and on-site panels)
    *   user   - each person (notifications, topics, defaults for new requests) */
-  const TEAM_KEYS = ['autoMin', 'eventCheckMin', 'sweepMin', 'lastSaleScanMin', 'fxOverride', 'buyLimits', 'eventBuyLimits'];
+  const TEAM_KEYS = ['autoMin', 'eventCheckMin', 'sweepMin', 'lastSaleScanMin', 'lastSaleEvents', 'fxOverride', 'buyLimits', 'eventBuyLimits'];
   const DEVICE_KEYS = ['theme', 'sidebarMode', 'panels', 'listSort', 'selectSeats', 'pcNotify', 'lastSaleScan'];
 
   function scopeOf(key) {

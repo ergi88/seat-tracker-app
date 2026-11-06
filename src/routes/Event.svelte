@@ -54,6 +54,31 @@
   /* a filter whose last request went away falls back to all */
   $effect(() => { if (only !== 'all' && !tally[only]) only = 'all'; });
   const venue = $derived(venueFor(ev));
+
+  /* the Sold tab: a period, the map of what sold where in it, then the list */
+  let soldPeriod = $state('all');                 // all | today | week
+  const PERIODS = [['all', 'All'], ['today', 'Today'], ['week', '7 days']];
+  const soldList = $derived.by(() => {
+    if (!ev) return [];
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    const from = soldPeriod === 'today' ? midnight.getTime() : soldPeriod === 'week' ? Date.now() - 7 * 86400000 : 0;
+    return ev.lastSales.filter(s => s.firstSeen >= from);
+  });
+  const normCode = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  /* tickets and sales per section: the tracked sector's code, else viagogo's own name */
+  const soldBySection = $derived.by(() => {
+    const out = {};
+    for (const s of soldList) {
+      const k = normCode(s.code || s.section);
+      const x = out[k] || (out[k] = { tickets: 0, sales: 0 });
+      x.tickets += Number(s.tickets) || 0;
+      x.sales++;
+    }
+    return out;
+  });
+  const soldTickets = $derived(soldList.reduce((n, s) => n + (Number(s.tickets) || 0), 0));
+  /* sold in a section the map does not draw */
+  const offMap = $derived(venue ? soldList.filter(s => !venue.sections.some(x => normCode(x.code) === normCode(s.code || s.section))).length : 0);
   const myListings = $derived(v ? v.listings.filter(l => l.eventKey === key) : []);
 
   /* sectors: the searched ones, else the ones with free seats or wanted */
@@ -166,7 +191,28 @@
     {:else if tab === 'sold'}
       <!-- viagogo's "just sold" toasts for this event, saved by the extension on its sell pages -->
       <h2 class="section-title">Last sales on viagogo{ev.lastSales.length ? ` · ${ev.lastSales.length}` : ''}</h2>
-      <LastSales sales={ev.lastSales} />
+      {#if ev.lastSales.length}
+        <div class="filters" role="group" aria-label="Which sales">
+          {#each PERIODS as [k, label] (k)}
+            <button class:on={soldPeriod === k} onclick={() => (soldPeriod = k)}>{label}</button>
+          {/each}
+        </div>
+        {#if venue}
+          <div class="sold-map">
+            <div class="pic"><StadiumMap {venue} event={ev} sold={soldBySection} interactive={false} /></div>
+            <div class="cap">
+              <span><b>{plural(soldTickets, 'ticket')} in {plural(soldList.length, 'sale')}</b>
+                <span class="muted small">Tickets sold per section, darker for more{offMap ? ` · ${offMap} not on the map` : ''}</span></span>
+              <span class="legend" aria-hidden="true"><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i></span>
+            </div>
+          </div>
+        {/if}
+      {/if}
+      {#if ev.lastSales.length && !soldList.length}
+        <p class="muted small sold-note">No sale in this period.</p>
+      {:else}
+        <LastSales sales={soldList} />
+      {/if}
       {#if ev.lastSales.length}
         <p class="muted small sold-note">The time is when the sale was first read. The price is the one viagogo showed for the sale, with what each ticket comes to under it.</p>
       {/if}
@@ -250,6 +296,15 @@
   }
   @media (max-width: 370px) { .tabs button .num { display: none; } }
   .sold-note { margin-top: 8px; }
+  .sold-map { margin: 4px 0 12px; border-radius: var(--r-card); overflow: hidden; background: var(--panel); box-shadow: 0 1px 0 var(--line); }
+  .sold-map .pic { height: 240px; }
+  .sold-map .cap span:first-child { display: grid; }
+  .legend { display: inline-flex; gap: 3px; flex: none; }
+  .legend i { width: 14px; height: 10px; border-radius: 2px; }
+  .legend .h1 { background: color-mix(in srgb, var(--s-low) 35%, var(--sec-zero)); }
+  .legend .h2 { background: color-mix(in srgb, var(--s-low) 65%, var(--sec-zero)); }
+  .legend .h3 { background: color-mix(in srgb, var(--s-bad) 70%, var(--s-low)); }
+  .legend .h4 { background: var(--s-bad); }
   .sectors-tab { display: grid; }
   .filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 0 10px; padding-bottom: 2px; }
   .filters::-webkit-scrollbar { display: none; }

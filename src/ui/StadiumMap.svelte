@@ -14,11 +14,16 @@
    * section then counts only the seats at those prices, from its full scan,
    * and a block is "together" only within them, as the extension judges a
    * request with picked prices. Coloured dots show which prices a block
-   * still has free. */
+   * still has free.
+   *
+   * With `sold` ({ <section code>: { tickets, sales } }, codes compared
+   * without spaces or case) it is the map of viagogo's last sales instead:
+   * each section coloured by how many tickets sold there, darker for more,
+   * with the count on it, and nothing of requests or free seats. */
   import { untrack } from 'svelte';
   import { SK } from '../lib/sk.js';
 
-  let { venue, event, requests = [], listings = [], minBlock = 0, cats = [], scans = {}, interactive = true, onpick = () => {} } = $props();
+  let { venue, event, requests = [], listings = [], minBlock = 0, cats = [], scans = {}, sold = null, interactive = true, onpick = () => {} } = $props();
 
   // svelte-ignore state_referenced_locally
   const [VX, VY, VW, VH] = venue.viewBox;            // a venue never changes under a mounted map
@@ -36,8 +41,24 @@
   const priceOf = $derived(event && event.cats ? event.cats : {});
   const byPrice = (a, b) => ((priceOf[b] || {}).price || 0) - ((priceOf[a] || {}).price || 0);
 
+  const soldMax = $derived(sold ? Math.max(1, ...Object.values(sold).map(x => Number(x.tickets) || 0)) : 1);
+
   const info = $derived.by(() => {
     const out = {};
+    if (sold) {
+      for (const sec of venue.sections) {
+        const x = sold[norm(sec.code)];
+        const n = x ? Number(x.tickets) || 0 : 0;
+        const r = n / soldMax;
+        out[sec.code] = {
+          sector: sectorByCode.get(norm(sec.code)) || null, free: n ? n : null, dots: [], tables: null, perTable: 0, wanted: 0,
+          fill: !n ? 'nosale' : r <= 0.25 ? 'h1' : r <= 0.5 ? 'h2' : r <= 0.75 ? 'h3' : 'h4',
+          reqTone: null, reqCount: 0, held: false, tickets: 0, badge: null, dim: false, ticketsOf: '',
+          soldTip: x ? `${sec.code}: ${n} ticket${n === 1 ? '' : 's'} in ${x.sales} sale${x.sales === 1 ? '' : 's'}` : ''
+        };
+      }
+      return out;
+    }
     const picked = cats && cats.length ? cats.map(String) : null;
     for (const sec of venue.sections) {
       const s = sectorByCode.get(norm(sec.code)) || null;
@@ -268,7 +289,8 @@
 
   {#each venue.sections as s (s.code)}
     {@const i = info[s.code]}
-    <g class="sec {i.fill}" class:dim={i.dim} class:pick={!!i.sector} data-code={s.code}>
+    <g class="sec {i.fill}" class:dim={i.dim} class:pick={!!i.sector && !sold} data-code={s.code}>
+      {#if i.soldTip}<title>{i.soldTip}</title>{/if}
       {#if s.shape === 'grid'}
         {@const cw = s.w / s.cols}
         {@const ch = s.h / s.rows}
@@ -340,6 +362,14 @@
   .sec.l2 .shape { fill: var(--sec-l2); }
   .sec.l3 .shape { fill: var(--sec-l3); }
   .sec.l4 .shape { fill: var(--sec-l4); }
+  /* viagogo's last sales: tickets sold per section, darker for more */
+  .sec.nosale .shape { fill: var(--sec-unread); }
+  .sec.h1 .shape { fill: color-mix(in srgb, var(--s-low) 35%, var(--sec-zero)); }
+  .sec.h2 .shape { fill: color-mix(in srgb, var(--s-low) 65%, var(--sec-zero)); }
+  .sec.h3 .shape { fill: color-mix(in srgb, var(--s-bad) 70%, var(--s-low)); }
+  .sec.h4 .shape { fill: var(--s-bad); }
+  .nosale .code { fill: var(--muted); font-weight: 500; }
+  .h3 .code, .h3 .free, .h4 .code, .h4 .free { fill: #fff; }
   .sold-bg { fill: var(--sec-zero); }
   .sold-line { stroke: var(--sec-sold-line); stroke-width: 4; }
   .sec.dim { opacity: .22; }

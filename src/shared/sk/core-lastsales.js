@@ -323,37 +323,79 @@
     return ago >= 2 && ago <= 200;
   }
 
-  /* The viagogo events the last-sales scan visits: every one the team has a
-   * listing on, or saved a last sale for, seen in the last `days` days, and
-   * not already over.
-   * src: { listings, teamPrices, lastSales } (arrays) -> [{ vgEventId, title, when, eventKey }] */
-  function scanTargets(src, now, days) {
+  /* The viagogo events the last-sales scan visits, and the ones set aside.
+   *   on its own: every event someone in the team has a listing on, seen in
+   *               the last `days` days and not over yet ('yours' / 'team');
+   *   by hand:    the team's list (team setting lastSaleEvents):
+   *               { <vgEventId>: { mode: 'add' | 'off', every, title, when } }
+   *               'add' scans an event nobody lists on (research), 'off'
+   *               leaves out one that would be scanned on its own, and
+   *               `every` gives one event its own interval.
+   * src: { listings, teamPrices, watch }, `listings` being your own
+   * -> { on: [target], off: [target] }, target = { vgEventId, title, when, eventKey, source, every } */
+  function scanPlan(src, now, days) {
     const t = now || Date.now();
     const since = t - (days || 14) * 86400000;
-    const out = new Map();
-    const add = (id, title, when, eventKey, at) => {
+    const watch = (src && src.watch) || {};
+    const found = new Map();
+    const add = (id, title, when, eventKey, at, source) => {
       const key = String(id || '').replace(/\D/g, '');
       if (key.length < 5 || !(at >= since)) return;
-      const had = out.get(key) || { vgEventId: key, title: '', when: '', eventKey: null };
-      out.set(key, {
-        vgEventId: key, title: had.title || title || '', when: had.when || when || '', eventKey: had.eventKey || eventKey || null
+      const had = found.get(key) || { vgEventId: key, title: '', when: '', eventKey: null, source };
+      found.set(key, {
+        vgEventId: key, title: had.title || title || '', when: had.when || when || '', eventKey: had.eventKey || eventKey || null,
+        source: had.source === 'yours' || source === 'yours' ? 'yours' : 'team'
       });
     };
-    for (const l of (src && src.listings) || []) add(l.vgEventId, l.title, l.when, l.eventKey, l.seenAt);
-    for (const l of (src && src.teamPrices) || []) add(l.vgEventId, l.title, l.when, l.eventKey, l.seenAt);
-    for (const s of (src && src.lastSales) || []) add(s.vgEventId, s.title, s.when, s.eventKey, s.firstSeen);
-    return [...out.values()].filter(x => !isPastWhen(x.when, t));
+    for (const l of (src && src.listings) || []) add(l.vgEventId, l.title, l.when, l.eventKey, l.seenAt, 'yours');
+    for (const l of (src && src.teamPrices) || []) add(l.vgEventId, l.title, l.when, l.eventKey, l.seenAt, 'team');
+    for (const [k, x] of found) if (isPastWhen(x.when, t)) found.delete(k);
+    for (const [id, w] of Object.entries(watch)) {
+      if (!w || w.mode !== 'add' || !/^\d{5,}$/.test(id) || found.has(id)) continue;
+      found.set(id, { vgEventId: id, title: w.title || '', when: w.when || '', eventKey: null, source: 'added' });
+    }
+    const on = [], off = [];
+    for (const x of found.values()) {
+      const w = watch[x.vgEventId] || {};
+      const every = Number(w.every) > 0 ? Math.max(SCAN_MIN_EVERY, Number(w.every)) : null;
+      const target = Object.assign(x, { every, title: x.title || w.title || '', when: x.when || w.when || '' });
+      (w.mode === 'off' ? off : on).push(target);
+    }
+    const byTitle = (a, b) => (a.title || a.vgEventId).localeCompare(b.title || b.vgEventId);
+    return { on: on.sort(byTitle), off: off.sort(byTitle) };
   }
+  const scanTargets = (src, now, days) => scanPlan(src, now, days).on;
 
-  /* The event to visit next: not visited for `everyMs`, not set aside, the
-   * longest-waiting first. history: { <vgEventId>: { at, skipUntil } } */
+  /* The event to visit next: not visited for its interval (its own, else
+   * `everyMs`), not set aside, the longest-waiting first.
+   * history: { <vgEventId>: { at, skipUntil } } */
   function nextTarget(targets, history, everyMs, now) {
     const t = now || Date.now();
     const h = history || {};
     return (targets || [])
-      .filter(x => { const y = h[x.vgEventId] || {}; return !(y.skipUntil > t) && t - (y.at || 0) >= everyMs; })
+      .filter(x => { const y = h[x.vgEventId] || {}; return !(y.skipUntil > t) && t - (y.at || 0) >= (x.every ? x.every * 60000 : everyMs); })
       .sort((a, b) => ((h[a.vgEventId] || {}).at || 0) - ((h[b.vgEventId] || {}).at || 0))[0] || null;
   }
+
+  /* a viagogo event number from what someone pastes: a link (…/E-161613530,
+   * ?EventID=161613530) or the number itself */
+  function eventIdFrom(text) {
+    const t = String(text || '').trim();
+    const m = /\/E-(\d{5,})/i.exec(t) || /[?&]EventID=(\d{5,})/i.exec(t) || /^(\d{5,})$/.exec(t);
+    return m ? m[1] : '';
+  }
+
+  /* what the scan's last answer for an event was, in words */
+  const RESULT_TEXT = {
+    sale: 'saved a new sale', same: 'the same sale as before', none: 'no sale to show',
+    session: 'started a sell session for it', renew: 'its sell session had expired',
+    'no-sell': 'viagogo has no sell page for it (over?)', error: 'no answer', 'signed-out': 'viagogo was signed out',
+    blocked: 'viagogo refused (bot check)'
+  };
+  const SOURCE_TEXT = { yours: 'you list on it', team: 'the team lists on it', added: 'added by hand' };
+
+  /* the intervals one event can have; null = the team's */
+  const EVENT_EVERY = [15, 30, 60, 120, 240];
 
   /* ---------------- asking viagogo, with no page open ---------------- */
 
@@ -414,7 +456,7 @@
   SK.lastSales = {
     isSellPage, pipelineIdOf, eventIdIn, eventIdOnPage, vgKeyOf, parseToast, readToast, whenNear, isBlockPage,
     clean, fingerprint, compare, sameEvent, forEvent, priceSplit, priceText, byDay, dayLabel, dayLine, nextDelay, EVERY, DEFAULT_EVERY, MIN_GAP_MS, BLOCK_PAUSE_MS,
-    sellUrl, isLoginPage, isPastWhen, scanTargets, nextTarget, scanGap, SCAN_GAP_MS, SCAN_MIN_EVERY,
+    sellUrl, isLoginPage, isPastWhen, scanPlan, scanTargets, nextTarget, eventIdFrom, EVENT_EVERY, RESULT_TEXT, SOURCE_TEXT, scanGap, SCAN_GAP_MS, SCAN_MIN_EVERY,
     recentSoldUrl, parseRecentSold, sessionsFrom, SESSION_KEY, isBotAnswer, SESSION_FRESH_MS
   };
 
