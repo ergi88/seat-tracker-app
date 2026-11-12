@@ -249,6 +249,8 @@ export function demoMirror(now = Date.now()) {
     p2: buy('p2', 'a2', 2, { requestId: 'r1' }),
     p9: Object.assign(buy('p9', 'a9', 3), { userId: MATE })
   };
+  /* the saved viagogo scans, as the list syncs them: without their rows */
+  m.vgScans = Object.fromEntries(demoVgScans(now).map(x => [x.dbId, Object.assign({}, x, { rows: null })]));
   m.fingerprints = { demo: '1' };
   m.pulledAt = now;
   return m;
@@ -261,3 +263,62 @@ export const demoScans = (now = Date.now()) => ({
     12: packed('12', [['1', 'oooooo|ooooo..ooo'], ['2', 'oooo..oooooooooo'], ['3', '..oo.ooo|oooooo'], ['4', 'oooooooooooooooooooooo']], now - 2 * 60000)
   }
 });
+
+/* Two saved scans of the Albania vs Serbia viagogo page, the newer 40 min
+ * ago and the older 3 hours before it, and one of Kosovo vs Sweden: some
+ * listings gone, some new, some cheaper, some with fewer tickets. */
+let lastVg = null;
+export function demoVgScans(now) {
+  /* the same scans the mirror listed, when asked again without a time */
+  if (now === undefined && lastVg) return lastVg;
+  if (now === undefined) now = Date.now();
+  const v = VENUES.find(x => x.id === 'air-albania');
+  const codes = [...v.sections.map(s => s.code), 'V VIP'];
+  const hash = str => { let h = 7; for (const ch of str) h = (h * 31 + ch.charCodeAt(0)) % 99991; return h; };
+  const rows = [];
+  for (const code of codes) {
+    const h = hash(code);
+    const n = h % 7 === 0 ? 0 : h % 5 + 1;
+    for (let i = 0; i < n; i++) {
+      const x = hash(code + i);
+      const qtyMax = [1, 2, 2, 3, 4, 4, 6, 10, 12][x % 9];
+      rows.push({
+        id: String(14000000000 + x * 10 + i), anon: false, k: code, label: code, row: x % 3 ? String(x % 25 + 1) : '',
+        price: 35 + (x % 120) + (code.startsWith('V') ? 150 : 0), currency: 'USD',
+        qtyMin: x % 4 === 0 ? 1 : qtyMax, qtyMax, features: x % 5 === 0 ? ['Aisle seat'] : [], mine: false, sold: false,
+        ...(x % 3 === 0 ? { tags: ['Instant Download'] } : {})
+      });
+    }
+  }
+  const mine = [
+    { id: '20000000001', anon: false, k: 'E106', label: 'E106', row: '', price: 84, currency: 'USD', qtyMin: 1, qtyMax: 6, features: [], mine: true, sold: false },
+    { id: '20000000002', anon: false, k: 'W105', label: 'W105', row: '', price: 61, currency: 'USD', qtyMin: 2, qtyMax: 2, features: [], mine: true, sold: false, tags: ['Instant Download'] }
+  ];
+  const older = rows.concat(mine);
+  const newer = [];
+  rows.forEach((r, i) => {
+    if (i % 7 === 3) return;                                                   // gone: sold or taken off
+    const y = Object.assign({}, r);
+    if (i % 5 === 1) y.price = Math.max(20, r.price - 6);                     // cheaper
+    if (i % 13 === 4) y.price = r.price + 9;                                   // dearer
+    if (i % 11 === 2 && r.qtyMax > 2) { y.qtyMax = r.qtyMax - 2; y.qtyMin = Math.min(y.qtyMin, y.qtyMax); }
+    newer.push(y);
+  });
+  for (let i = 0; i < 5; i++) {
+    const code = codes[(i * 17 + 3) % codes.length];
+    newer.push({ id: String(15000000000 + i), anon: false, k: code, label: code, row: String(i + 3), price: 42 + i * 11, currency: 'USD',
+      qtyMin: 2, qtyMax: 2 + i, features: [], mine: false, sold: false });
+  }
+  newer.push(Object.assign({}, mine[0], { price: 79 }), mine[1]);
+  const scan = (vg, ev, name, start, at, list, dbId) => ({
+    v: 1, id: String(at), dbId, eventId: vg, eventKey: ev, name, start, at, savedAt: at + 60000, complete: true, signedIn: true,
+    shown: list.length, total: list.length + 3, listings: list.length, by: 'Office PC', rows: list
+  });
+  const t1 = now - 40 * 60000, t0 = t1 - 3 * 3600000;
+  const ks = rows.filter((r, i) => i % 4 === 0).map(r => Object.assign({}, r, { k: 'T' + (r.price % 3), label: ['Tribuna Lindore', 'Tribuna Perëndimore', 'VIP'][r.price % 3] }));
+  return (lastVg = [
+    scan('161613530', 'ebileta:2160', 'Albania vs Serbia', 'Sat 14 Nov 2026 20:45', t1, newer, 'vg2'),
+    scan('161613530', 'ebileta:2160', 'Albania vs Serbia', 'Sat 14 Nov 2026 20:45', t0, older, 'vg1'),
+    scan('161600003', null, 'Kosovo vs Sweden', 'Tue 17 Nov 2026 20:45', now - 26 * 3600000, ks, 'vg3')
+  ]);
+}

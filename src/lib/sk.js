@@ -11,6 +11,7 @@ import '../shared/sk/core-viagogo.js';
 import '../shared/sk/core-team.js';
 import '../shared/sk/core-sales.js';
 import '../shared/sk/core-lastsales.js';
+import '../shared/sk/core-market.js';
 import '../shared/sk/sites-ebileta.js';
 import '../shared/sk/sites-efinity.js';
 import '../shared/sk/sites-posttick.js';

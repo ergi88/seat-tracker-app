@@ -8,6 +8,7 @@
  * no DOM.
  * ------------------------------------------------------------------ */
 import { SK } from './sk.js';
+import { stockOf } from './stock.js';
 
 export const ONLINE_MS = 2 * 60000;
 const ACTIVE_LISTING = /^(active|pending|live)/i;
@@ -372,6 +373,7 @@ export function buildView(m, me, opts = {}) {
       buyLimit: (settings.eventBuyLimits || {})[ev.key] || null,
       siteBuyLimit: (settings.buyLimits || {})[ev.site] || null,
       buys: buysOf(accounts, purchases, ev.key, buyLimitOf(ev, settings)),
+      vgSectors: (ev.viagogo && ev.viagogo.sectors) || null,
       priceCurrency: siteCurrencyOf(ev.site)
     };
   }).sort((a, b) => byNearest(now)(a, b) || a.num - b.num);
@@ -448,11 +450,35 @@ export function buildView(m, me, opts = {}) {
     if (!buy && Number(s.buyPrice) > 0) buy = { amount: s.buyPrice, currency: s.buyCurrency || 'ALL', source: 'typed on the section' };
     const at = ratesAt(m, Date.parse(s.soldOn) || s.seenAt);
     return Object.assign({}, s, {
+      eventKey: ev ? ev.key : s.eventKey || null, sectorId: sectorId || null,
       time: ev ? evTime(ev.key) ?? eventTime(s.when, now) : eventTime(s.when, now),
       eventNum: ev ? ev.num : null, eventTitle: ev ? SK.util.eventInfo(ev).name : '', requestNum: r ? r.num : null,
       buy, money: Object.assign(SK.sales.saleMoney(s, buy, at.rates), { rateDay: at.day })
     });
   }).sort((a, b) => String(b.soldOn).localeCompare(String(a.soldOn)));
+
+  /* your saved viagogo event scans (the newest two each), one entry per
+   * viagogo event, newest first; a tracked event's is on it too */
+  const byVg = {};
+  for (const x of Object.values(m.vgScans || {})) (byVg[x.eventId] = byVg[x.eventId] || []).push(x);
+  const vgEvents = Object.entries(byVg).map(([vgEventId, list]) => {
+    list.sort((a, b) => b.at - a.at);
+    const ev = events.find(e => list.some(x => x.eventKey === e.key)) || events.find(e => e.vgEventId === vgEventId) || null;
+    return {
+      vgEventId, name: list[0].name || (ev ? ev.info.name : ''), start: list[0].start,
+      eventKey: ev ? ev.key : null, eventNum: ev ? ev.num : null, time: ev ? ev.time : eventTime(list[0].start, now),
+      scans: list, latest: list[0], url: 'https://www.viagogo.com/E-' + vgEventId
+    };
+  }).sort((a, b) => b.latest.at - a.latest.at);
+  for (const ev of events) ev.vgScans = vgEvents.find(g => g.eventKey === ev.key) || null;
+
+  /* what you hold for each event, bought against listed and sold */
+  const lekOf = (amount, currency, at) => {
+    const r = SK.profit.rateOf(ratesAt(m, at || now).rates, currency || SK.profit.BASE);
+    return r && Number(amount) > 0 ? Number(amount) * r : null;
+  };
+  const rateNow = c => SK.profit.rateOf(ratesAt(m, now).rates, c);
+  for (const ev of events) ev.stock = stockOf({ ev, purchases, requests, listings, sales, lekOf, isPaid: SK.sales.isPaid, rateNow });
 
   const team = [...new Set(m.members.map(x => x.userId).concat(Object.keys(m.profiles)))]
     .map(uid => ({ userId: uid, name: ownerName(uid), me: uid === me }))
@@ -470,7 +496,7 @@ export function buildView(m, me, opts = {}) {
     .map(t => Object.assign({}, t, { owner: ownerName(t.userId) }));
 
   return {
-    me, settings, events, requests, listings, sales, lastSales, devices, team, teamListings, accounts, purchases,
+    me, settings, events, requests, listings, sales, lastSales, devices, team, teamListings, accounts, purchases, vgEvents,
     open, attention,
     pcsOnline: devices.filter(d => d.online),
     snoozeUntil: (m.profiles[me] || {}).snoozeUntil || 0,

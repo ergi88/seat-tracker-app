@@ -93,10 +93,20 @@
         </div>
       {/if}
     {/if}
+    {#if v.vgEvents.length}
+      <div class="group vglink">
+        <a class="row" href={href.vg()}>
+          <span class="grow"><span class="title">viagogo scans</span>
+            <span class="sub">listings you saved from the PC drawer · {plural(v.vgEvents.length, 'event')}</span></span>
+          <span class="chev"><Icon name="chev" size={18} /></span>
+        </a>
+      </div>
+    {/if}
   {/if}
 </Page>
 
 <style>
+  .vglink { margin-top: 18px; }
   .search { position: relative; display: block; margin: 14px 0 12px; color: var(--muted); }
   .search :global(svg) { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); }
   .search .input { padding-left: 38px; background: var(--softer); border-color: transparent; }

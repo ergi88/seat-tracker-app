@@ -11,6 +11,7 @@ import { get, set, del } from 'idb-keyval';
 import { supa, must } from './supa.js';
 import { pull, supaDb } from './sync.js';
 import { buildView } from './model.js';
+import { SK } from './sk.js';
 
 const DEVICE_KEY = 'sk-app-device';
 const SYNC_MS = 15000;
@@ -24,6 +25,7 @@ class Store {
   user = $state.raw(null);                 // { id, email }
   mirror = $state.raw(null);
   scans = $state.raw({});                  // full scans fetched on demand: { [eventKey]: { [sectorId]: scan } }
+  vgFull = $state.raw({});                 // saved viagogo scans with their rows: { [vgEventId]: [scan, newest first] }
   hidden = $state.raw({});                 // requests waiting out their undo window
   hiddenAlerts = $state.raw({});           // inbox alerts waiting out theirs: { [id]: true }
   hiddenListings = $state.raw({});         // listings waiting out theirs: { [listingId]: true }
@@ -138,6 +140,7 @@ class Store {
     this.user = null;
     this.mirror = null;
     this.scans = {};
+    this.vgFull = {};
   }
 
   /* a new alert: a notification when they are on and allowed (Settings →
@@ -199,6 +202,21 @@ class Store {
   reloadApp() {
     if (this.update.ready && this.applyUpdate) this.applyUpdate();
     else location.reload();
+  }
+
+  /* the saved scans of one viagogo event with every listing, newest first
+   * (the database keeps two) */
+  async fetchVgScans(vgEventId) {
+    const id = String(vgEventId);
+    let list;
+    if (this.demo) list = this.demo.demoVgScans().filter(x => x.eventId === id);
+    else {
+      const rows = await must(supa.from('vg_scans').select('*').eq('vg_event_id', id).order('scanned_at', { ascending: false }).limit(2));
+      list = (rows || []).map(SK.market.scanFromRow);
+    }
+    list.sort((a, b) => b.at - a.at);
+    this.vgFull = Object.assign({}, this.vgFull, { [id]: list });
+    return list;
   }
 
   /* the full scan of a few sectors, for a status preview or a sector's blocks */

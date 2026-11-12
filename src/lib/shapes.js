@@ -6,6 +6,7 @@
  * lands (phase 3) this moves to the extension's core/shapes.js and both
  * sides import it from there.
  * ------------------------------------------------------------------ */
+import { SK } from './sk.js';
 
 export const time = v => (v ? Date.parse(v) : 0);
 const numOr = v => (v === null || v === undefined || v === '' ? null : Number(v));
@@ -125,7 +126,13 @@ export const SPECS = [
     put: (m, r) => { (m.sectorPrices[r.event_key] = m.sectorPrices[r.event_key] || {})[r.sector_id] = toSectorPrice(r); } },
   /* optional too: a database without the last-sales table syncs everything else */
   { name: 'lastSales', table: 'vg_last_sales', ts: 'updated_at', optional: true, clear: m => { m.lastSales = {}; },
-    put: (m, r) => { (m.lastSales = m.lastSales || {})[String(r.id)] = toLastSale(r); } }
+    put: (m, r) => { (m.lastSales = m.lastSales || {})[String(r.id)] = toLastSale(r); } },
+  /* your saved viagogo event scans, without their rows (fetched when one is
+   * opened): the newest two per event, so a save deletes one (idCol) */
+  { name: 'vgScans', table: 'vg_scans', ts: 'created_at', idCol: 'id', optional: true,
+    select: 'id,vg_event_id,event_key,name,start_text,scanned_at,signed_in,complete,shown,total,listings,saved_by,created_at',
+    clear: m => { m.vgScans = {}; },
+    put: (m, r) => { (m.vgScans = m.vgScans || {})[String(r.id)] = SK.market.scanFromRow(r); } }
 ];
 
 export const specOf = name => SPECS.find(s => s.name === name);
@@ -133,7 +140,7 @@ export const specOf = name => SPECS.find(s => s.name === name);
 export function emptyMirror() {
   return {
     team: {}, profiles: {}, events: {}, requests: {}, state: {}, scanMeta: {}, health: {}, leases: {},
-    listings: {}, sales: {}, teamPrices: {}, fx: {}, accounts: {}, purchases: {}, sectorPrices: {}, lastSales: {}, members: [], devices: [], alerts: [],
+    listings: {}, sales: {}, teamPrices: {}, fx: {}, accounts: {}, purchases: {}, sectorPrices: {}, lastSales: {}, vgScans: {}, members: [], devices: [], alerts: [],
     fingerprints: {}, serverOffset: 0, pulledAt: 0
   };
 }

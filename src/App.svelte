@@ -21,6 +21,7 @@
   import DeleteRequestSheet from './routes/DeleteRequestSheet.svelte';
   import DeleteListingSheet from './routes/DeleteListingSheet.svelte';
   import Accounts from './routes/Accounts.svelte';
+  import VgScans from './routes/VgScans.svelte';
   import AccountSheet from './routes/AccountSheet.svelte';
   import PurchaseSheet from './routes/PurchaseSheet.svelte';
   import PricesSheet from './routes/PricesSheet.svelte';
@@ -61,6 +62,7 @@
       {:else if route.name === 'inbox'}<Inbox />
       {:else if route.name === 'settings'}<Settings />
       {:else if route.name === 'accounts'}<Accounts />
+      {:else if route.name === 'vg'}<VgScans id={route.arg} />
       {/if}
     {/key}
   </div>

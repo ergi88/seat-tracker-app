@@ -6,6 +6,7 @@
   import StadiumMap from '../ui/StadiumMap.svelte';
   import DateTile from '../ui/DateTile.svelte';
   import BuysCard from '../ui/BuysCard.svelte';
+  import StockCard from '../ui/StockCard.svelte';
   import LastSales from '../ui/LastSales.svelte';
   import { venueFor } from '../lib/venues.js';
   import { PERIODS, inPeriod, bySection, offMap as soldOffMap } from '../lib/sold.js';
@@ -13,7 +14,7 @@
   import { store } from '../lib/store.svelte.js';
   import { router, href } from '../lib/router.svelte.js';
   import { setArchived } from '../lib/actions.js';
-  import { ago, clock, plural, fromToday, longDay } from '../lib/fmt.js';
+  import { ago, clock, plural, fromToday, longDay, when } from '../lib/fmt.js';
 
   let { key } = $props();
   let q = $state('');
@@ -129,6 +130,17 @@
       </a>
     {/if}
 
+    <!-- your saved scans of its viagogo page, from the PC drawer -->
+    {#if ev.vgScans}
+      <div class="group vgscans">
+        <a class="row" href={href.vg(ev.vgScans.vgEventId)}>
+          <span class="grow"><span class="title">viagogo listings</span>
+            <span class="sub">saved {when(ev.vgScans.latest.at)} · {plural(ev.vgScans.latest.listings, 'listing')}{ev.vgScans.scans.length > 1 ? ' · what changed since the one before' : ''}</span></span>
+          <Icon name="chev" size={18} />
+        </a>
+      </div>
+    {/if}
+
     {#if ev.health && ev.health.failing}
       <div class="banner bad"><span><b>Scans failing since {clock(ev.health.firstFailAt)}</b>{ev.health.lastError || ''}</span></div>
     {/if}
@@ -163,6 +175,7 @@
         {#each done as r (r.id)}<RequestCard {r} />{/each}
       {/if}
     {:else if tab === 'buy'}
+      <StockCard {ev} />
       <BuysCard {ev} />
 
       <!-- what a ticket costs in each sector: Add purchase fills its price from here -->
@@ -252,6 +265,7 @@
   .cap { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); }
   .cap > span:first-child { display: grid; }
   .open { display: inline-flex; align-items: center; gap: 2px; color: var(--accent); font-weight: 650; font-size: 14px; white-space: nowrap; }
+  .vgscans { margin-top: 12px; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
   .chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 99px; background: var(--panel); font-size: 13px; color: var(--muted); box-shadow: 0 1px 0 var(--line); }
   .chip.accent { background: var(--accent-soft); color: var(--accent); }
