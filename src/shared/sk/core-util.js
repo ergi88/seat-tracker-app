@@ -66,6 +66,28 @@
     return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   }
 
+  /* a moment, with its day when it is not today: "21:28", "yesterday 21:28", "Thu 5 Nov 21:28" */
+  function fmtAt(ts) {
+    if (!ts) return 'never';
+    const d = new Date(ts), now = new Date();
+    const clock = fmtClock(ts);
+    if (dayStamp(ts) === dayStamp(now.getTime())) return clock;
+    if (dayStamp(ts) === dayStamp(now.getTime() - 86400000)) return `yesterday ${clock}`;
+    if (dayStamp(ts) === dayStamp(now.getTime() + 86400000)) return `tomorrow ${clock}`;
+    return `${d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })} ${clock}`;
+  }
+
+  /* how long until a moment: "in 40 s", "in 18 min", "in 5 h 12 min", or "now" */
+  function until(ts) {
+    const s = Math.round((ts - Date.now()) / 1000);
+    if (s <= 0) return 'now';
+    if (s < 60) return `in ${s} s`;
+    const min = Math.round(s / 60);
+    if (min < 60) return `in ${min} min`;
+    const h = Math.floor(min / 60), rest = min % 60;
+    return rest ? `in ${h} h ${rest} min` : `in ${h} h`;
+  }
+
   /* "23:30" -> 1410 minutes after midnight, or null */
   function parseHM(s) {
     const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || '').trim());
@@ -280,7 +302,7 @@
     splitEventTitle, eventInfo,
     listingId, viagogoUrl,
     clampInt, boolValue, normKey, newId, plural,
-    ago, since, fmtTime, fmtClock, parseHM, inDailyWindow, dayStamp,
+    ago, since, fmtTime, fmtClock, fmtAt, until, parseHM, inDailyWindow, dayStamp,
     esc, decodeHtml, NTFY_LIMIT, byteLength, splitMessage, titleParts, sleep
   };
 

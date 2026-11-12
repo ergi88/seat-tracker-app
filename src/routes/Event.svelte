@@ -8,6 +8,7 @@
   import BuysCard from '../ui/BuysCard.svelte';
   import LastSales from '../ui/LastSales.svelte';
   import { venueFor } from '../lib/venues.js';
+  import { PERIODS, inPeriod, bySection, offMap as soldOffMap } from '../lib/sold.js';
   import { SK } from '../lib/sk.js';
   import { store } from '../lib/store.svelte.js';
   import { router, href } from '../lib/router.svelte.js';
@@ -57,28 +58,12 @@
 
   /* the Sold tab: a period, the map of what sold where in it, then the list */
   let soldPeriod = $state('all');                 // all | today | week
-  const PERIODS = [['all', 'All'], ['today', 'Today'], ['week', '7 days']];
-  const soldList = $derived.by(() => {
-    if (!ev) return [];
-    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
-    const from = soldPeriod === 'today' ? midnight.getTime() : soldPeriod === 'week' ? Date.now() - 7 * 86400000 : 0;
-    return ev.lastSales.filter(s => s.firstSeen >= from);
-  });
-  const normCode = c => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const soldList = $derived(ev ? inPeriod(ev.lastSales, soldPeriod) : []);
   /* tickets and sales per section: the tracked sector's code, else viagogo's own name */
-  const soldBySection = $derived.by(() => {
-    const out = {};
-    for (const s of soldList) {
-      const k = normCode(s.code || s.section);
-      const x = out[k] || (out[k] = { tickets: 0, sales: 0 });
-      x.tickets += Number(s.tickets) || 0;
-      x.sales++;
-    }
-    return out;
-  });
+  const soldBySection = $derived(bySection(soldList));
   const soldTickets = $derived(soldList.reduce((n, s) => n + (Number(s.tickets) || 0), 0));
   /* sold in a section the map does not draw */
-  const offMap = $derived(venue ? soldList.filter(s => !venue.sections.some(x => normCode(x.code) === normCode(s.code || s.section))).length : 0);
+  const offMap = $derived(soldOffMap(soldList, venue).length);
   const myListings = $derived(v ? v.listings.filter(l => l.eventKey === key) : []);
 
   /* sectors: the searched ones, else the ones with free seats or wanted */
@@ -198,14 +183,14 @@
           {/each}
         </div>
         {#if venue}
-          <div class="sold-map">
+          <a class="sold-map" href={href.map(key, 'sold')} aria-label="Open the sales map: tap a section for its sales">
             <div class="pic"><StadiumMap {venue} event={ev} sold={soldBySection} interactive={false} /></div>
             <div class="cap">
               <span><b>{plural(soldTickets, 'ticket')} in {plural(soldList.length, 'sale')}</b>
-                <span class="muted small">Tickets sold per section, darker for more{offMap ? ` · ${offMap} not on the map` : ''}</span></span>
+                <span class="muted small">Tickets sold per section, darker for more{offMap ? ` · ${offMap} not on the map` : ''} · tap to pick a section</span></span>
               <span class="legend" aria-hidden="true"><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i></span>
             </div>
-          </div>
+          </a>
         {/if}
       {/if}
       {#if ev.lastSales.length && !soldList.length}
@@ -296,7 +281,7 @@
   }
   @media (max-width: 370px) { .tabs button .num { display: none; } }
   .sold-note { margin-top: 8px; }
-  .sold-map { margin: 4px 0 12px; border-radius: var(--r-card); overflow: hidden; background: var(--panel); box-shadow: 0 1px 0 var(--line); }
+  .sold-map { display: block; color: inherit; text-decoration: none; margin: 4px 0 12px; border-radius: var(--r-card); overflow: hidden; background: var(--panel); box-shadow: 0 1px 0 var(--line); }
   .sold-map .pic { height: 240px; }
   .sold-map .cap span:first-child { display: grid; }
   .legend { display: inline-flex; gap: 3px; flex: none; }

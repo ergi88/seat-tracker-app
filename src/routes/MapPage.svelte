@@ -1,17 +1,23 @@
 <script>
-  /* The stadium, full screen: every section coloured by its free seats, your
-   * requests and listings on it, tap one for its sheet. "Together" fades out
-   * the sections whose longest block is shorter than the group. */
+  /* The stadium, full screen, two ways:
+   *  - Requests & listings: every section coloured by its free seats, your
+   *    requests and listings on it, tap one for its sheet. "Together" fades
+   *    out the sections whose longest block is shorter than the group.
+   *  - Sales: viagogo's last sales, tickets sold per section; tap a section
+   *    and the list under the map shows only its sales (tap it again, or
+   *    All sections, for all of them). */
   import { untrack } from 'svelte';
   import Icon from '../ui/Icon.svelte';
   import { SK } from '../lib/sk.js';
   import StadiumMap from '../ui/StadiumMap.svelte';
+  import LastSales from '../ui/LastSales.svelte';
+  import { PERIODS, inPeriod, bySection, offMap as soldOffMap, saleCode, normCode, stats } from '../lib/sold.js';
   import { store } from '../lib/store.svelte.js';
   import { router, href } from '../lib/router.svelte.js';
   import { venueFor } from '../lib/venues.js';
-  import { ago, fromToday } from '../lib/fmt.js';
+  import { ago, fromToday, money, plural } from '../lib/fmt.js';
 
-  let { key } = $props();
+  let { key, view: startView = '' } = $props();
   const v = $derived(store.view);
   const ev = $derived(v ? v.events.find(e => e.key === key) : null);
   const venue = $derived(venueFor(ev));
@@ -75,6 +81,39 @@
   /* legend entries this venue needs */
   const hasStanding = $derived(!!(ev && ev.sectors.some(s => s.summary && s.summary.unmapped)));
   const hasOff = $derived(!!(venue && ev && venue.sections.some(sec => !ev.sectors.some(s => String(s.code).toUpperCase() === sec.code.toUpperCase()))));
+  /* ---------------- which map: seats, or sales ---------------------- */
+  // svelte-ignore state_referenced_locally
+  let mode = $state(startView === 'sold' || startView === 'seats' ? startView : (store.deviceSettings.mapView === 'sold' ? 'sold' : 'seats'));
+  function setMode(m) { mode = m; picked = ''; store.saveDeviceSettings({ mapView: m }); navigator.vibrate?.(6); }
+
+  let period = $state('all');
+  let picked = $state('');                           // a section code, '' = all of them
+  const soldAll = $derived(ev ? ev.lastSales || [] : []);
+  const soldList = $derived(inPeriod(soldAll, period));
+  const soldMap = $derived(bySection(soldList));
+  /* sold where the drawing has no place: chips, so they can be picked too */
+  const soldOff = $derived.by(() => {
+    const out = new Map();
+    for (const s of soldOffMap(soldList, venue)) {
+      const k = saleCode(s);
+      const x = out.get(k) || { code: s.code || s.section, tickets: 0 };
+      x.tickets += Number(s.tickets) || 0;
+      out.set(k, x);
+    }
+    return [...out.values()];
+  });
+  const shownSales = $derived(picked ? soldList.filter(s => saleCode(s) === normCode(picked)) : soldList);
+  const shownStats = $derived(stats(shownSales));
+  const eachText = st => Object.entries(st.each).map(([c, x]) => (Math.abs(x.max - x.min) < 0.005
+    ? `${money(x.avg, c)}/pc` : `${money(x.min, c)}–${money(x.max, c)}/pc, avg ${money(x.avg, c)}`)).join(' · ');
+
+  function pickSold(code) {
+    if (picked && normCode(picked) === normCode(code)) { picked = ''; return; }
+    if (!soldMap[normCode(code)]) { store.toast(`No sale in ${code}${period === 'all' ? '' : ' in this period'}.`); return; }
+    picked = code;
+    navigator.vibrate?.(6);
+  }
+
   function setBlock(n) { minBlock = n; store.saveDeviceSettings({ mapBlock: n }); navigator.vibrate?.(6); }
 </script>
 
@@ -93,6 +132,61 @@
   {:else if !ev || !venue}
     <div class="empty"><p>No stadium map for this event.</p><a class="btn" href={href.event(key)}>Back to the event</a></div>
   {:else}
+    <div class="modes" role="tablist" aria-label="What the map shows">
+      <button role="tab" aria-selected={mode === 'seats'} class:on={mode === 'seats'} onclick={() => setMode('seats')}>Requests &amp; listings</button>
+      <button role="tab" aria-selected={mode === 'sold'} class:on={mode === 'sold'} onclick={() => setMode('sold')}>Sales{soldAll.length ? ` · ${soldAll.length}` : ''}</button>
+    </div>
+
+    {#if mode === 'sold'}
+    <div class="tools">
+      <div class="seg" role="radiogroup" aria-label="Period">
+        {#each PERIODS as [k, label] (k)}
+          <button role="radio" aria-checked={period === k} class:on={period === k} onclick={() => { period = k; navigator.vibrate?.(6); }}>{label}</button>
+        {/each}
+      </div>
+      <span class="sum num">{plural(stats(soldList).tickets, 'ticket')} in {plural(soldList.length, 'sale')}</span>
+    </div>
+
+    <div class="stage sold">
+      <StadiumMap bind:this={map} {venue} event={ev} sold={soldMap} {picked} onpick={pickSold} />
+      <div class="zoom">
+        <button onclick={() => map.zoomBy(1.6)} aria-label="Zoom in"><Icon name="plus" size={22} /></button>
+        <button onclick={() => map.zoomBy(1 / 1.6)} aria-label="Zoom out"><Icon name="minus" size={22} /></button>
+        <button onclick={() => map.reset()} aria-label="Whole stadium" class="fit">⤢</button>
+      </div>
+    </div>
+
+    <section class="sales-panel" aria-label="Sales">
+      <div class="ph">
+        <div class="pt">
+          <b>{picked || 'All sections'}</b>
+          <span class="muted small num">
+            {plural(shownStats.tickets, 'ticket')} · {plural(shownStats.sales, 'sale')}{eachText(shownStats) ? ` · ${eachText(shownStats)}` : ''}{shownStats.last ? ` · last ${ago(shownStats.last)}` : ''}
+          </span>
+        </div>
+        {#if picked}<button class="chip on" onclick={() => (picked = '')}>All sections ✕</button>{/if}
+      </div>
+      {#if soldOff.length}
+        <div class="off">
+          {#each soldOff as x (x.code)}
+            <button class="chip" class:on={picked && normCode(picked) === normCode(x.code)} onclick={() => pickSold(x.code)}>{x.code} · {x.tickets}</button>
+          {/each}
+        </div>
+      {/if}
+      {#if !soldAll.length}
+        <p class="muted small none">No sale saved for this event yet. The extension asks viagogo for the latest sale of every event the team lists on.</p>
+      {:else if !shownSales.length}
+        <p class="muted small none">No sale {picked ? `in ${picked} ` : ''}in this period.</p>
+      {:else}
+        <LastSales sales={shownSales} />
+      {/if}
+      <div class="keys sold-keys">
+        <span><i class="sw nosale"></i>No sale</span>
+        <span><i class="sw grad"></i>Fewer → more tickets sold</span>
+        <span>Tap a section for its sales</span>
+      </div>
+    </section>
+    {:else}
     <div class="tools">
       <div class="seg" role="radiogroup" aria-label="Seats together">
         <span class="lbl">Together</span>
@@ -149,6 +243,7 @@
       {/if}
       <p class="tiny muted">Scanned {ago(totals.newest)} · pinch or double-tap to zoom, tap a section</p>
     </footer>
+    {/if}
   {/if}
 </div>
 
@@ -206,5 +301,24 @@
   .off { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
   .chip { flex: none; min-height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel); font-size: 13px; font-weight: 600; cursor: pointer; }
   .legend p { margin: 0; }
+
+  .modes { flex: none; display: grid; grid-template-columns: 1fr 1fr; padding: 3px; margin: 0 calc(12px + var(--safe-r)) 8px calc(12px + var(--safe-l)); border-radius: 11px; background: var(--softer); }
+  .modes button { min-height: 32px; border: 0; border-radius: 8px; background: none; font-weight: 650; font-size: 13.5px; color: var(--muted); cursor: pointer; }
+  .modes button.on { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px var(--shadow); }
+  /* sales: the map on top, its list under it, each scrolling on its own */
+  .stage.sold { flex: 1 1 0; min-height: 300px; }
+  .sales-panel {
+    flex: 0 1 auto; max-height: 40%; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    padding: 10px calc(12px + var(--safe-r)) calc(10px + var(--safe-b)) calc(12px + var(--safe-l)); display: grid; gap: 6px; align-content: start;
+  }
+  .ph { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .pt { display: grid; gap: 1px; min-width: 0; }
+  .pt b { font-size: 16px; }
+  .chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .none { margin: 4px 2px; }
+  .sales-panel :global(.last) { margin-top: 0; }
+  .sold-keys { padding-top: 4px; }
+  .sw.nosale { background: var(--sec-unread); box-shadow: inset 0 0 0 1px var(--line); }
+  .sw.grad { width: 34px; background: linear-gradient(90deg, color-mix(in srgb, var(--s-low) 35%, var(--sec-zero)), var(--s-low), var(--s-bad)); }
   .skeleton.big { margin: 16px; height: 60vh; }
 </style>

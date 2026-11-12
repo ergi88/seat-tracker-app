@@ -121,6 +121,6 @@ export const router = new Router();
 export const href = {
   event: key => '#/event/' + encodeURIComponent(key),
   add: key => '#/add' + (key ? '?event=' + encodeURIComponent(key) : ''),
-  map: key => '#/map/' + encodeURIComponent(key),
+  map: (key, view) => '#/map/' + encodeURIComponent(key) + (view ? '?view=' + view : ''),
   accounts: () => '#/accounts'
 };

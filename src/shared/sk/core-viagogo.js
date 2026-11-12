@@ -576,6 +576,10 @@
   /* cheap "has the top of the list changed" for waiting on the page */
   const firstRowSig = doc => { const a = rowsOf(doc)[0]; return a ? (a.getAttribute('data-listing-id') || textOf(a).slice(0, 80)) : ''; };
 
+  /* The red label on your own cards: "Your listing - 13981313702" until
+   * 2026-11, "Your tickets - 14625523298" since. */
+  const isMineLabel = t => /^your\s+(?:listings?|tickets?)\b/i.test(String(t || '').trim());
+
   /* the listing rows loaded so far, in list order */
   function readRows(doc) {
     const money = t => (SK.profit ? SK.profit.parseMoney(t) : null);
@@ -615,7 +619,7 @@
         features: details.filter(t => t !== qtyText),
         tags: [...a.querySelectorAll('.ensemble_listingCardTags__tagLabel')].map(textOf).filter(t => t && !/^only\s+\d+\s+left$/i.test(t)),
         left: left ? Number(left[1]) : null,
-        mine: !!kind && /^your listing/i.test(textOf(kind)),
+        mine: !!kind && isMineLabel(textOf(kind)),
         anon: !a.hasAttribute('data-listing-id'),
         sold: a.getAttribute('data-is-sold') === '1'
       });
@@ -777,7 +781,7 @@
 
   SK.viagogo = {
     listingDiffs, worstDiff, lastChange,
-    isEventPage, eventIdOf, selectedSectionOf, sectionUrl, readEventInfo, readSections, readRows, rowCount, firstRowSig, showMoreButton, listFooter,
+    isEventPage, eventIdOf, selectedSectionOf, sectionUrl, readEventInfo, readSections, readRows, isMineLabel, rowCount, firstRowSig, showMoreButton, listFooter,
     isListingsPage, isPricePage, readListingCards, parseListingCard, listingStatus, LISTING_STATUSES,
     paginationOf, currentPage, arrowDead, sweepUrl, sweepReady, SWEEP_TABS,
     isConfirmedPage, readListings, parseCard, parseDetails, readSellDetails, parseWhen, titleWords,

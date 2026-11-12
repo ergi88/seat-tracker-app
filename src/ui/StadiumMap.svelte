@@ -19,11 +19,12 @@
    * With `sold` ({ <section code>: { tickets, sales } }, codes compared
    * without spaces or case) it is the map of viagogo's last sales instead:
    * each section coloured by how many tickets sold there, darker for more,
-   * with the count on it, and nothing of requests or free seats. */
+   * with the count on it, and nothing of requests or free seats. A section
+   * with sales can be tapped then; `picked` (its code) is outlined. */
   import { untrack } from 'svelte';
   import { SK } from '../lib/sk.js';
 
-  let { venue, event, requests = [], listings = [], minBlock = 0, cats = [], scans = {}, sold = null, interactive = true, onpick = () => {} } = $props();
+  let { venue, event, requests = [], listings = [], minBlock = 0, cats = [], scans = {}, sold = null, picked = '', interactive = true, onpick = () => {} } = $props();
 
   // svelte-ignore state_referenced_locally
   const [VX, VY, VW, VH] = venue.viewBox;            // a venue never changes under a mounted map
@@ -59,18 +60,18 @@
       }
       return out;
     }
-    const picked = cats && cats.length ? cats.map(String) : null;
+    const pickedCats = cats && cats.length ? cats.map(String) : null;
     for (const sec of venue.sections) {
       const s = sectorByCode.get(norm(sec.code)) || null;
       const sum = s && s.summary;
       const sold = !!(s && s.meta && s.meta.status === 'soldout');
       const scan = s ? (scans || {})[s.id] : null;
       /* at the picked prices: from the full scan, or unknown until it arrives */
-      const view = picked ? (scan ? SK.rules.blocksFor(scan, picked) : null) : null;
-      const free = picked ? (view ? view.available : null) : (sum && !sum.unmapped ? Number(sum.available) || 0 : null);
-      const longest = picked ? (view ? view.longest : 0) : (sum ? Number(sum.longest) || 0 : 0);
+      const view = pickedCats ? (scan ? SK.rules.blocksFor(scan, pickedCats) : null) : null;
+      const free = pickedCats ? (view ? view.available : null) : (sum && !sum.unmapped ? Number(sum.available) || 0 : null);
+      const longest = pickedCats ? (view ? view.longest : 0) : (sum ? Number(sum.longest) || 0 : 0);
       const dots = (sum && Array.isArray(sum.cats) ? sum.cats.map(String) : [])
-        .filter(k => priceOf[k] && (!picked || picked.includes(k))).sort(byPrice).slice(0, 6)
+        .filter(k => priceOf[k] && (!pickedCats || pickedCats.includes(k))).sort(byPrice).slice(0, 6)
         .map(k => priceOf[k].color || 'var(--muted)');
       const mine = s ? requests.filter(r => !r.done && String(r.sec) === String(s.id)) : [];
       /* open requests win; violet (bought) only when every one here is bought */
@@ -289,7 +290,7 @@
 
   {#each venue.sections as s (s.code)}
     {@const i = info[s.code]}
-    <g class="sec {i.fill}" class:dim={i.dim} class:pick={!!i.sector && !sold} data-code={s.code}>
+    <g class="sec {i.fill}" class:dim={i.dim} class:pick={sold ? i.free !== null : !!i.sector} class:picked={!!picked && norm(picked) === norm(s.code)} data-code={s.code}>
       {#if i.soldTip}<title>{i.soldTip}</title>{/if}
       {#if s.shape === 'grid'}
         {@const cw = s.w / s.cols}
@@ -373,6 +374,9 @@
   .sold-bg { fill: var(--sec-zero); }
   .sold-line { stroke: var(--sec-sold-line); stroke-width: 4; }
   .sec.dim { opacity: .22; }
+  /* the section whose sales are listed under the map */
+  .sec.picked .shape { stroke: var(--accent); stroke-width: 7; paint-order: stroke; }
+  .sec.picked { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 55%, transparent)); }
   .interactive .sec.pick { cursor: pointer; }
   .interactive .sec.pick:hover .shape { filter: brightness(.94); }
 

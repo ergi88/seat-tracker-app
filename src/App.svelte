@@ -56,7 +56,7 @@
       {:else if route.name === 'events'}<Events />
       {:else if route.name === 'event'}<Event key={route.arg} />
       {:else if route.name === 'add'}<AddRequest eventKey={route.params.event || ''} sec={route.params.sec || ''} />
-      {:else if route.name === 'map'}<MapPage key={route.arg} />
+      {:else if route.name === 'map'}<MapPage key={route.arg} view={route.params.view || ''} />
       {:else if route.name === 'money'}<Money />
       {:else if route.name === 'inbox'}<Inbox />
       {:else if route.name === 'settings'}<Settings />

@@ -377,6 +377,48 @@
       .sort((a, b) => ((h[a.vgEventId] || {}).at || 0) - ((h[b.vgEventId] || {}).at || 0))[0] || null;
   }
 
+  /* When each event's next turn should come, as the scan would take them:
+   * one request every `gapMs` (the middle of scanGap), starting at `startAt`
+   * (the next tick, or the end of a block or pause), and a turn of its own to
+   * start a sell session for an event that has none yet.
+   * -> { <vgEventId>: time } — a guess, the gaps are random. */
+  function scanQueue(targets, history, everyMs, opts) {
+    const o = opts || {};
+    const list = targets || [];
+    const gap = o.gapMs || (SCAN_GAP_MS[0] + SCAN_GAP_MS[1]) / 2;
+    const h = {};
+    for (const [k, v] of Object.entries(history || {})) h[k] = Object.assign({}, v);
+    const has = new Set(o.withSession || []);
+    const out = {};
+    const intervalOf = y => (y.every ? y.every * 60000 : everyMs);
+    let t = Math.max(o.now || Date.now(), o.startAt || 0);
+    for (let i = 0; i < list.length * 3 + 5 && Object.keys(out).length < list.length; i++) {
+      let x = nextTarget(list, h, everyMs, t);
+      if (!x) {
+        const dues = list.filter(y => !(y.vgEventId in out)).map(y => {
+          const z = h[y.vgEventId] || {};
+          return Math.max((z.at || 0) + intervalOf(y), z.skipUntil || 0);
+        });
+        if (!dues.length) break;
+        t = Math.max(t, Math.min(...dues));
+        x = nextTarget(list, h, everyMs, t);
+        if (!x) break;
+      }
+      if (!has.has(x.vgEventId)) { has.add(x.vgEventId); t += gap; }
+      if (!(x.vgEventId in out)) out[x.vgEventId] = t;
+      h[x.vgEventId] = Object.assign({}, h[x.vgEventId], { at: t });
+      t += gap;
+    }
+    return out;
+  }
+
+  /* about how many requests an hour the scan makes: one per event per
+   * interval, never more than one every SCAN_GAP_MS allows */
+  function requestsPerHour(targets, everyMin) {
+    const n = (targets || []).reduce((a, x) => a + 60 / Math.max(SCAN_MIN_EVERY, x.every || everyMin || 30), 0);
+    return Math.round(Math.min(n, 3600000 / ((SCAN_GAP_MS[0] + SCAN_GAP_MS[1]) / 2)));
+  }
+
   /* a viagogo event number from what someone pastes: a link (…/E-161613530,
    * ?EventID=161613530) or the number itself */
   function eventIdFrom(text) {
@@ -390,8 +432,10 @@
     sale: 'saved a new sale', same: 'the same sale as before', none: 'no sale to show',
     session: 'started a sell session for it', renew: 'its sell session had expired',
     'no-sell': 'viagogo has no sell page for it (over?)', error: 'no answer', 'signed-out': 'viagogo was signed out',
-    blocked: 'viagogo refused (bot check)'
+    blocked: 'viagogo refused (bot check)', recent: 'asked a moment ago already'
   };
+  /* who asked last */
+  const BY_TEXT = { scan: 'by the scan', hand: 'by you, with Get last sale now', page: 'by a sell page you opened' };
   const SOURCE_TEXT = { yours: 'you list on it', team: 'the team lists on it', added: 'added by hand' };
 
   /* the intervals one event can have; null = the team's */
@@ -456,7 +500,7 @@
   SK.lastSales = {
     isSellPage, pipelineIdOf, eventIdIn, eventIdOnPage, vgKeyOf, parseToast, readToast, whenNear, isBlockPage,
     clean, fingerprint, compare, sameEvent, forEvent, priceSplit, priceText, byDay, dayLabel, dayLine, nextDelay, EVERY, DEFAULT_EVERY, MIN_GAP_MS, BLOCK_PAUSE_MS,
-    sellUrl, isLoginPage, isPastWhen, scanPlan, scanTargets, nextTarget, eventIdFrom, EVENT_EVERY, RESULT_TEXT, SOURCE_TEXT, scanGap, SCAN_GAP_MS, SCAN_MIN_EVERY,
+    sellUrl, isLoginPage, isPastWhen, scanPlan, scanTargets, nextTarget, scanQueue, requestsPerHour, eventIdFrom, EVENT_EVERY, RESULT_TEXT, SOURCE_TEXT, BY_TEXT, scanGap, SCAN_GAP_MS, SCAN_MIN_EVERY,
     recentSoldUrl, parseRecentSold, sessionsFrom, SESSION_KEY, isBotAnswer, SESSION_FRESH_MS
   };
 

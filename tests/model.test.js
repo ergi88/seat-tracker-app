@@ -73,7 +73,7 @@ test('a request with no state yet gets a preview from the last scan', () => {
 });
 
 test('sales: profit at the rates of the day they sold', () => {
-  const s1 = view().sales.find(s => s.id === 's1');
+  const s1 = view().sales.find(s => s.id === '1460021001');
   assert.equal(Math.round(s1.money.payoutL), Math.round(151.2 * 83.36));
   assert.equal(Math.round(s1.money.costL), 8000);
 });

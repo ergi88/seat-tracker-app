@@ -4,6 +4,7 @@
   import Page from '../ui/Page.svelte';
   import Icon from '../ui/Icon.svelte';
   import Calculator from './Calculator.svelte';
+  import SalesBook from '../ui/SalesBook.svelte';
   import { SK } from '../lib/sk.js';
   import { store } from '../lib/store.svelte.js';
   import { router } from '../lib/router.svelte.js';
@@ -53,17 +54,8 @@
     for (const g of map.values()) g.items.sort((a, b) => String(a.code).localeCompare(String(b.code), 'en', { numeric: true }));
     return [...map.values()].sort((a, b) => byNearest()(a, b) || String(a.title).localeCompare(String(b.title)));
   });
-  /* sales: grouped by core/sales.js, then put nearest event first like everything else */
-  const sales = $derived.by(() => {
-    if (!v) return { total: null, events: [] };
-    const g = SK.sales.groupSales(v.sales.filter(saleHit));
-    for (const e of g.events) {
-      const first = e.sections[0] && e.sections[0].sales[0];
-      e.time = first ? first.time : null;
-    }
-    g.events.sort((a, b) => byNearest()(a, b) || String(b.lastSold).localeCompare(String(a.lastSold)));
-    return g;
-  });
+  /* sales: grouped, totalled and numbered in SalesBook, as the extension's drawer does */
+  const sales = $derived(v ? v.sales.filter(saleHit) : []);
   const lastRead = $derived(v && v.listings.length ? Math.max(...v.listings.map(l => l.seenAt || 0)) : 0);
 </script>
 
@@ -123,32 +115,14 @@
       {/if}
     {/each}
   {:else}
-    {#if sales.total}
-      <div class="hero">
-        <div><span class="l">Profit</span><b class="num {sales.total.profitL >= 0 ? 'ok' : 'bad'}">{lek(sales.total.profitL, true)}</b></div>
-        <div><span class="l">Tickets sold</span><b class="num">{sales.total.tickets}</b></div>
-        <div><span class="l">Not paid yet</span><b class="num {sales.total.unpaid ? 'low' : ''}">{lek(sales.total.unpaidL)}</b></div>
-      </div>
-    {/if}
-    {#each sales.events as e (e.key)}
-      <h2 class="section-title">{e.title}{#if e.time !== null && e.time !== undefined}<span class="days">{' · ' + fromToday(e.time)}</span>{/if}</h2>
-      <div class="group">
-        {#each e.sections as sec (sec.section)}
-          <div class="row static">
-            <span class="grow">
-              <span class="title">{sec.section} <span class="muted num">× {sec.total.tickets}</span></span>
-              <span class="sub">{sec.total.sales} sale{sec.total.sales === 1 ? '' : 's'}{sec.total.unpaid ? ` · ${sec.total.unpaid} not paid yet` : ''}{sec.total.noBuy ? ` · ${sec.total.noBuy} without a buy price` : ''}</span>
-            </span>
-            <span class="right num {sec.total.profitL >= 0 ? 'ok' : 'bad'}">{sec.total.counted ? lek(sec.total.profitL, true) : '—'}<small>{win(sec.total.winRate)}</small></span>
-          </div>
-        {/each}
-      </div>
-    {:else}
-      <div class="empty">
-        {#if q.trim()}<p>No sale matches “{q.trim()}”.</p>
-        {:else}<div class="big">🧾</div><p>No sales saved yet. Open My Sales on viagogo on a PC with the extension.</p>{/if}
-      </div>
-    {/each}
+    <SalesBook {sales} every={v.sales}>
+      {#snippet empty()}
+        <div class="empty">
+          {#if q.trim()}<p>No sale matches “{q.trim()}”.</p>
+          {:else}<div class="big">🧾</div><p>No sales saved yet. Open My Sales on viagogo on a PC with the extension.</p>{/if}
+        </div>
+      {/snippet}
+    </SalesBook>
   {/if}
 </Page>
 

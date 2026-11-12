@@ -197,9 +197,21 @@ export function demoMirror(now = Date.now()) {
   m.teamPrices = {
     20000000003: { id: '20000000003', userId: MATE, eventKey: 'ebileta:2160', sectorId: '12', section: 'E106', row: '', status: 'Active', currency: 'USD', price: 79, tickets: 4, seenAt: now - 60 * min }
   };
+  /* my viagogo sales: two events, a few sections, some with a buy price, some not paid yet */
+  const sale = (id, sectorId, section, tickets, amount, daysAgo, extra) => ({ id, userId: ME, eventKey: 'ebileta:2160', sectorId, vgEventId: '161613530', listingId: null,
+    title: 'Albania vs Serbia', when: '2026-11-14T20:45:00', venue: '', section, row: '', tickets, currency: 'USD', amount, status: 'Complete',
+    soldOn: new Date(now - daysAgo * 86400000).toISOString().slice(0, 10), buyPrice: 3000, buyCurrency: 'ALL', seenAt: now, ...extra });
   m.sales = {
-    s1: { id: 's1', userId: ME, eventKey: 'ebileta:2160', sectorId: '12', vgEventId: '161613530', listingId: null, title: 'Albania vs Serbia', when: 'Sat 14 Nov', venue: '', section: 'E106', row: '', tickets: 2, currency: 'USD', amount: 151.2, status: 'Complete', soldOn: day, buyPrice: null, buyCurrency: 'ALL', seenAt: now },
-    s2: { id: 's2', userId: ME, eventKey: 'ebileta:2160', sectorId: '11', vgEventId: '161613530', listingId: null, title: 'Albania vs Serbia', when: 'Sat 14 Nov', venue: '', section: 'E105', row: '', tickets: 4, currency: 'USD', amount: 260, status: 'Get Paid', soldOn: day, buyPrice: null, buyCurrency: 'ALL', seenAt: now }
+    s1: sale('1460021001', '12', 'E106', 2, 151.2, 9),
+    s2: sale('1460021002', '11', 'E105', 4, 260, 8, { buyPrice: 3500 }),
+    s3: sale('1460021003', '12', 'E106', 1, 82, 7, { row: '14' }),
+    s4: sale('1460021004', '13', 'W105', 2, 129, 6, { buyPrice: null }),
+    s5: sale('1460021005', '11', 'E105', 3, 201, 4, { buyPrice: 3500, row: '7' }),
+    s6: sale('1460021006', '12', 'E106', 2, 170, 3),
+    s7: sale('1460021007', '11', 'E105', 2, 150, 1, { buyPrice: 3500, status: 'Get Paid' }),
+    s8: sale('1460021008', '12', 'E106', 4, 330, 0, { status: 'Get Paid' }),
+    k1: sale('1460031001', null, 'Tribuna Lindore', 2, 96, 12, { eventKey: null, vgEventId: '161600003', title: 'Kosovo vs Sweden', when: '2026-11-17T20:45:00', buyPrice: 2500 }),
+    k2: sale('1460031002', null, 'Tribuna Lindore', 1, 51, 10, { eventKey: null, vgEventId: '161600003', title: 'Kosovo vs Sweden', when: '2026-11-17T20:45:00', buyPrice: 2500 })
   };
   /* viagogo's "just sold" toasts, as the extension saved them */
   const ls = (id, sectorId, section, tickets, price, ago, seen) => ({
