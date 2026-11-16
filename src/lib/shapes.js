@@ -33,7 +33,9 @@ export const toListing = r => ({
   seenAt: time(r.seen_at), seenBy: r.seen_by || '', venue: r.venue || '',
   track: r.track === 'off' ? 'off' : 'auto',
   lastSweepAt: time(r.last_sweep_at),
-  buyPrice: numOr(r.buy_price), buyCurrency: r.buy_currency || 'ALL'
+  buyPrice: numOr(r.buy_price), buyCurrency: r.buy_currency || 'ALL',
+  /* viagogo's PreDelivered: the tickets are uploaded (null: not read yet) */
+  uploaded: r.uploaded === true ? true : r.uploaded === false ? false : null
 });
 
 export const toSale = r => ({
@@ -65,12 +67,35 @@ export const toAccount = r => ({
   birthday: r.birthday ? String(r.birthday).slice(0, 10) : '', notes: r.notes || '', createdAt: time(r.created_at)
 });
 
+/* a purchase is a lot of the inventory: for a tracked event (eventKey), or a
+ * viagogo event nobody tracks (vgEventId, with its title and a typed section);
+ * assigned = where its tickets went: { listings: { id: qty }, sales: { id: qty },
+ *   seats, notes: { saleId: seats }, other: [sold outside viagogo] } (lib/lots.js) */
 export const toPurchase = r => ({
-  id: r.id, userId: r.user_id, accountId: r.account_id, eventKey: r.event_key, requestId: r.request_id || null,
+  id: r.id, userId: r.user_id, accountId: r.account_id, eventKey: r.event_key || null, requestId: r.request_id || null,
+  vgEventId: r.vg_event_id || '', eventTitle: r.event_title || '', section: r.section || '',
   sectorId: r.sector_id || null, qty: Number(r.qty) || 1, price: numOr(r.price), currency: r.currency || 'ALL',
   boughtOn: r.bought_on ? String(r.bought_on).slice(0, 10) : '', orderRef: r.order_ref || '', notes: r.notes || '',
+  assigned: assignedFrom(r.assigned),
   createdAt: time(r.created_at)
 });
+
+function assignedFrom(a) {
+  const obj = o => (o && typeof o === 'object' && !Array.isArray(o) ? o : {});
+  const clean = o => Object.fromEntries(Object.entries(obj(o))
+    .map(([k, q]) => [String(k), Math.round(Number(q))]).filter(([, q]) => q > 0));
+  const str = x => (x === null || x === undefined ? '' : String(x));
+  return {
+    listings: clean(a && a.listings), sales: clean(a && a.sales),
+    seats: str(a && a.seats),
+    notes: Object.fromEntries(Object.entries(obj(a && a.notes)).map(([k, t]) => [String(k), str(t)]).filter(([, t]) => t)),
+    /* sold outside viagogo */
+    other: (a && Array.isArray(a.other) ? a.other : []).map(x => ({
+      id: str(x && x.id), qty: Math.round(Number(x && x.qty)) || 0, price: numOr(x && x.price), currency: str(x && x.currency) || 'ALL',
+      on: str(x && x.on).slice(0, 10), where: str(x && x.where), seats: str(x && x.seats)
+    })).filter(x => x.qty > 0)
+  };
+}
 
 export const toSectorPrice = r => ({
   amount: Number(r.amount), currency: r.currency || 'ALL', updatedBy: r.updated_by || null, updatedAt: time(r.updated_at)
@@ -152,5 +177,5 @@ export function prune(m) {
   for (const key of Object.keys(m.scanMeta)) if (!m.events[key]) delete m.scanMeta[key];
   for (const key of Object.keys(m.health)) if (!m.events[key]) delete m.health[key];
   for (const key of Object.keys(m.sectorPrices || {})) if (!m.events[key]) delete m.sectorPrices[key];
-  for (const [id, p] of Object.entries(m.purchases || {})) if (!m.events[p.eventKey] || !(m.accounts || {})[p.accountId]) delete m.purchases[id];
+  for (const [id, p] of Object.entries(m.purchases || {})) if ((p.eventKey && !m.events[p.eventKey]) || !(m.accounts || {})[p.accountId]) delete m.purchases[id];
 }

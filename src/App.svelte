@@ -12,6 +12,7 @@
   import AddRequest from './routes/AddRequest.svelte';
   import MapPage from './routes/MapPage.svelte';
   import Money from './routes/Money.svelte';
+  import Inventory from './routes/Inventory.svelte';
   import Inbox from './routes/Inbox.svelte';
   import Settings from './routes/Settings.svelte';
   import DealSheet from './routes/DealSheet.svelte';
@@ -56,8 +57,9 @@
       {#if route.name === 'now'}<Now />
       {:else if route.name === 'events'}<Events />
       {:else if route.name === 'event'}<Event key={route.arg} />
-      {:else if route.name === 'add'}<AddRequest eventKey={route.params.event || ''} sec={route.params.sec || ''} />
+      {:else if route.name === 'add'}<AddRequest eventKey={route.params.event || ''} sec={route.params.sec || ''} qty={route.params.qty || ''} cats={route.params.cats || ''} />
       {:else if route.name === 'map'}<MapPage key={route.arg} view={route.params.view || ''} />
+      {:else if route.name === 'inventory'}<Inventory />
       {:else if route.name === 'money'}<Money />
       {:else if route.name === 'inbox'}<Inbox />
       {:else if route.name === 'settings'}<Settings />
@@ -79,7 +81,7 @@
       {:else if sheet.kind === 'deleteListing'}<DeleteListingSheet id={sheet?.id} />
       {:else if sheet.kind === 'account'}<AccountSheet id={sheet?.id} />
       {:else if sheet.kind === 'prices'}<PricesSheet eventKey={sheet?.eventKey} />
-      {:else if sheet.kind === 'purchase'}<PurchaseSheet id={sheet?.id} eventKey={sheet?.eventKey} requestId={sheet?.requestId} />
+      {:else if sheet.kind === 'purchase'}<PurchaseSheet id={sheet?.id} eventKey={sheet?.eventKey} vgEventId={sheet?.vgEventId} requestId={sheet?.requestId} listingId={sheet?.listingId} saleId={sheet?.saleId} />
       {/if}
     {/key}
   {/if}

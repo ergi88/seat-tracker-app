@@ -11,6 +11,7 @@
   import { store } from '../lib/store.svelte.js';
   import { router, href } from '../lib/router.svelte.js';
   import { ago, lek, money, win } from '../lib/fmt.js';
+  import { updateRequest } from '../lib/actions.js';
 
   let { eventKey, sectorId, table = null } = $props();
   const v = $derived(store.view);
@@ -121,7 +122,21 @@
     router.closeSheet({ all: true });
     setTimeout(fn, 320);
   }
-  const add = () => then(() => router.go(href.add(eventKey) + '&sec=' + encodeURIComponent(s.code)));
+  /* a new request starts with the tickets and prices counted here */
+  const add = () => then(() => router.go(href.add(eventKey) + '&sec=' + encodeURIComponent(s.code) + '&qty=' + qty + (pick.length ? '&cats=' + encodeURIComponent(pick.join(',')) : '')));
+
+  /* The picked prices are what an open request here watches: each one that
+   * watches other prices gets a button to take these. [] = every price. */
+  const sameCats = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+  const catsText = ks => (ks.length ? ks.map(k => (((ev && ev.cats) || {})[k] || {}).label || 'Price ' + k).join(' + ') : 'every price');
+  const openHere = $derived(mine.filter(r => !r.done && !r.bought));
+  const differ = $derived(openHere.filter(r => !sameCats(r.cats.map(String), pick)));
+  let savingCats = $state('');
+  async function useCats(r) {
+    savingCats = r.id;
+    try { await updateRequest(r.id, { cats: pick }); store.toast(`#${r.num} now watches ${catsText(pick)}`); }
+    catch (e) { store.toast(e.message, { tone: 'bad' }); } finally { savingCats = ''; }
+  }
   /* over this one: closing the request or listing brings this sector back */
   const openRequest = id => router.swapSheet({ kind: 'request', id });
   const openListing = id => router.swapSheet({ kind: 'listing', id });
@@ -192,6 +207,14 @@
           </button>
         {/each}
       </div>
+      {#each differ as r (r.id)}
+        <div class="usecats">
+          <span class="grow"><b>#{r.num} ×{r.qty}</b><small>watches {catsText(r.cats.map(String))}</small></span>
+          <button class="btn small primary" onclick={() => useCats(r)} disabled={!!savingCats}>{savingCats === r.id ? 'Saving…' : pick.length ? `Watch ${pick.length === 1 ? 'this price' : 'these prices'}` : 'Watch every price'}</button>
+        </div>
+      {:else}
+        {#if openHere.length}<p class="tiny muted note ok">{openHere.length === 1 ? `#${openHere[0].num} watches` : 'Your requests here watch'} {catsText(pick)}.</p>{/if}
+      {/each}
       <p class="tiny muted note">Tap prices to count them together. Options per price are for {qty} ticket{qty === 1 ? '' : 's'}{together ? ' side by side' : ''}; another price between seats breaks a block.</p>
     {/if}
 
@@ -328,6 +351,10 @@
   .price .cnt b { color: var(--ink); }
   .price .tag { font-size: 11px; font-weight: 700; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 99px; }
   .note { margin: 6px 4px 0; }
+  .note.ok { color: var(--ok); font-weight: 600; }
+  .usecats { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 8px 8px 8px 12px; border-radius: 10px; background: var(--accent-soft); }
+  .usecats .grow { flex: 1; min-width: 0; display: grid; }
+  .usecats small { font-size: 12px; color: var(--muted); }
   .rows { display: grid; gap: 4px; }
   .r { display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 10px; padding: 8px 12px; background: var(--soft); border-radius: 10px; font-size: 14px; }
   .runs { display: flex; flex-wrap: wrap; gap: 4px; }

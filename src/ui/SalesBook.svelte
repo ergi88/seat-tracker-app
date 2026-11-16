@@ -131,7 +131,7 @@
       </span>
       <span class="l2">
         <span class="sn num">#{s.id} · {s.buy ? `bought ${money(s.buy.amount, s.buy.currency)} each` : 'no buy price'}</span>
-        <b class="num {m.missing === null ? tone(m.profitL) : 'muted'}">{m.missing === null ? lek(m.profitL, true) : '—'}</b>
+        <b class="num {m.missing === null ? tone(m.profitL) : 'muted'}">{m.missing === null ? lek(m.profitL, true) : '—'}{#if m.missing === null && m.winRate}{' '}<small>{win(m.winRate)}</small>{/if}</b>
       </span>
       {#if m.missing === null}
         <span class="sg num">spent {bare(m.costL)} + profit {bare(m.profitL, true)} = <b class="nw">you get {lek(m.costL + m.profitL)}</b></span>
@@ -300,6 +300,7 @@
   .sp { font-weight: 650; flex: none; }
   .sn { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .l2 b { flex: none; font-size: 14px; }
+  .l2 b small { font-weight: 500; font-size: 12.5px; opacity: .8; }
   .sg { font-size: 12.5px; color: var(--muted); }
   .sg b { color: var(--ink); font-weight: 650; }
   .more { display: grid; gap: 2px; margin-top: 4px; padding: 8px 10px; border-radius: 10px; background: var(--panel); font-size: 12.5px; color: var(--muted); width: 100%; box-sizing: border-box; }

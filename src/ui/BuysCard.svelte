@@ -57,7 +57,7 @@
 
 <div class="card">
   {#if !b.rows.length}
-    <p class="muted small empty">Save the emails you buy with, then add each purchase: this shows how many every account bought here and which to use next.</p>
+    <p class="muted small empty">Save the emails you buy with, then add each lot you buy: this shows how many every account bought here and which to use next.</p>
   {/if}
   {#each used as r (r.account.id)}
     {@const pct = b.limit ? Math.min(100, Math.round((r.qty / b.limit) * 100)) : 0}
@@ -94,7 +94,7 @@
   {/if}
 </div>
 <div class="actions">
-  <button class="btn primary block" onclick={add}><Icon name="plus" size={18} /> Add purchase</button>
+  <button class="btn primary block" onclick={add}><Icon name="plus" size={18} /> Add lot</button>
   <a class="btn" href={href.accounts()} aria-label="Buying accounts"><Icon name="user" size={18} /></a>
 </div>
 

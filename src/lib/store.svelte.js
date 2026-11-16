@@ -219,6 +219,19 @@ class Store {
     return list;
   }
 
+  /* delete every saved scan of a viagogo event, in Supabase and here; each
+   * PC drops its own copies the next time its drawer opens the event */
+  async resetVgScans(vgEventId) {
+    const id = String(vgEventId);
+    if (!this.demo) await must(supa.from('vg_scans').delete().eq('vg_event_id', id));
+    this.mutate(m => {
+      for (const [k, x] of Object.entries(m.vgScans || {})) if (String(x.eventId) === id) delete m.vgScans[k];
+    });
+    const full = Object.assign({}, this.vgFull);
+    delete full[id];
+    this.vgFull = full;
+  }
+
   /* the full scan of a few sectors, for a status preview or a sector's blocks */
   async fetchScans(eventKey, sectorIds) {
     if (this.demo) {

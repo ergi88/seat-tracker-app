@@ -117,6 +117,7 @@
     </div>
 
     <div class="chips">
+      {#if ev.vgEventId}<a class="chip sell" href={'https://www.viagogo.com/E-' + ev.vgEventId} target="_blank" rel="noopener" title="This event's page on viagogo">viagogo event <Icon name="external" size={14} /></a>{/if}
       {#if ev.sellUrl}<a class="chip sell" href={ev.sellUrl} target="_blank" rel="noopener" title="viagogo's own Sell page for this event">Sell on viagogo <Icon name="external" size={14} /></a>{/if}
       <span class="chip"><Icon name="refresh" size={14} /> {ev.lastScanAt ? `scanned ${ago(ev.lastScanAt)}` : 'never scanned'}{ev.lastScanBy ? ` by ${ev.lastScanBy}` : ''}</span>
       <span class="chip">{ev.autoEvery ? `auto-check every ${ev.autoEvery} min` : 'auto-check off'}</span>

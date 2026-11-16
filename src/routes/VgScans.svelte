@@ -61,6 +61,17 @@
   /* "12 → 10", or "12" when it did not move */
   const mv = (a, b, f = String) => { const t = x => (x === null || x === undefined ? '—' : f(x)); return a === b ? t(b) : `${t(a)} → ${t(b)}`; };
   const free = s => { const sec = ev && sectorOf(ev, s.label); return sec && sec.summary ? sec.summary.available : null; };
+  /* both saved scans gone, in the app and on the PCs */
+  let resetting = $state(false);
+  async function reset() {
+    if (!group || !confirm(`Delete the ${plural(group.scans.length, 'saved scan')} of ${group.name || 'this event'}? The PC drawers drop them too.`)) return;
+    resetting = true;
+    try {
+      await store.resetVgScans(id);
+      which = 0;
+      store.toast('Saved scans deleted');
+    } catch (e) { store.toast(e.message, { tone: 'bad' }); } finally { resetting = false; }
+  }
   const pickStand = k => {
     const on = new Set(opts.stands || []);
     on.has(k) ? on.delete(k) : on.add(k);
@@ -303,6 +314,11 @@
           {/if}
         {/if}
       {/if}
+
+      <button class="btn danger block reset" onclick={reset} disabled={resetting || (!store.demo && !store.online)}>
+        <Icon name="trash" size={18} /> {resetting ? 'Resetting…' : `Reset saved scans (${group.scans.length})`}
+      </button>
+      <p class="muted small note">Deletes {group.scans.length > 1 ? 'both saved scans' : 'the saved scan'} of this event, here and on every PC, so the next Save starts fresh.</p>
     {/if}
   </Page>
 {/if}
@@ -310,6 +326,7 @@
 
 <style>
   .note { margin: 6px 4px 14px; }
+  .reset { margin-top: 22px; }
   .scans .pick { width: 100%; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
   .scans .dot { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--line-strong, var(--muted)); flex: none; }
   .scans .pick.on .dot { box-shadow: inset 0 0 0 5px var(--accent); }

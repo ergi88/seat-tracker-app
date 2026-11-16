@@ -719,7 +719,11 @@
    *   -> { NumFound, Listing: [{ Id, Status, EventId, EventDescription,
    *        EventDateSimplifiedStr, VenueDescription, City, Country, Section,
    *        Rows, Quantity, QuantityRemain, PricePerTicket{Amount,Currency},
-   *        PayoutPerTicket{Amount,Currency}, PriceDetails{TotalProceeds} … }] }
+   *        PayoutPerTicket{Amount,Currency}, PriceDetails{TotalProceeds},
+   *        PreDelivered … }] }
+   *   PreDelivered is false while the card says "Instant download pending",
+   *   true once the tickets are uploaded (the app's inventory asks for a lot
+   *   for an uploaded listing no lot covers).
    *   Pages start at 1; a page past the end is empty. The "Sold" choice on
    *   the page sends EXPIRED. Unknown filter values are ignored, not refused —
    *   a typo would quietly return everything. PricePerTicket is the price the
@@ -775,7 +779,10 @@
       section: str(x.Section, 40),
       row: str(x.Rows, 20),
       performance: '',
-      vgEventId: String(x.EventId === null || x.EventId === undefined ? '' : x.EventId).replace(/\D/g, '')
+      vgEventId: String(x.EventId === null || x.EventId === undefined ? '' : x.EventId).replace(/\D/g, ''),
+      /* PreDelivered: the tickets are uploaded (the card says "Instant
+       * download pending" while they are not); null when the JSON leaves it out */
+      uploaded: x.PreDelivered === true ? true : x.PreDelivered === false ? false : null
     };
   }
 

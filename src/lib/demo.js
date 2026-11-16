@@ -186,12 +186,12 @@ export function demoMirror(now = Date.now()) {
     20000000001: {
       id: '20000000001', userId: ME, eventKey: 'ebileta:2160', sectorId: '12', vgEventId: '161613530', title: 'Albania vs Serbia', when: 'Sat 14 Nov',
       section: 'E106', row: '', status: 'Active', currency: 'USD', price: 84, payout: 453.6, tickets: 6,
-      performance: '', history: [], seenAt: now - 20 * min, seenBy: 'pc1', venue: 'Air Albania', track: 'auto', lastSweepAt: 0, buyPrice: null, buyCurrency: 'ALL'
+      performance: '', history: [], seenAt: now - 20 * min, seenBy: 'pc1', venue: 'Air Albania', track: 'auto', lastSweepAt: 0, buyPrice: null, buyCurrency: 'ALL', uploaded: false
     },
     20000000002: {
       id: '20000000002', userId: ME, eventKey: 'ebileta:2160', sectorId: '13', vgEventId: '161613530', title: 'Albania vs Serbia', when: 'Sat 14 Nov',
       section: 'W105', row: '', status: 'Active', currency: 'USD', price: 61, payout: 158.6, tickets: 2,
-      performance: '', history: [], seenAt: now - 20 * min, seenBy: 'pc1', venue: 'Air Albania', track: 'auto', lastSweepAt: 0, buyPrice: 4000, buyCurrency: 'ALL'
+      performance: '', history: [], seenAt: now - 20 * min, seenBy: 'pc1', venue: 'Air Albania', track: 'auto', lastSweepAt: 0, buyPrice: 4000, buyCurrency: 'ALL', uploaded: true
     }
   };
   m.teamPrices = {
@@ -245,8 +245,11 @@ export function demoMirror(now = Date.now()) {
   const buy = (id, accountId, qty, extra) => ({ id, userId: ME, accountId, eventKey: 'ebileta:2160', requestId: null, sectorId: '12', qty,
     price: 4000, currency: 'ALL', boughtOn: new Date(now).toISOString().slice(0, 10), orderRef: '', notes: '', createdAt: now, ...extra });
   m.purchases = {
-    p1: buy('p1', 'a1', 4, { requestId: 'r1', orderRef: 'EB-88213' }),
-    p2: buy('p2', 'a2', 2, { requestId: 'r1' }),
+    /* lots: 4 on the E106 listing, 2 that went to a sale by hand */
+    p1: buy('p1', 'a1', 4, { requestId: 'r1', orderRef: 'EB-88213', assigned: { listings: { 20000000001: 4 }, sales: {}, seats: 'row 8, 10-13' } }),
+    p2: buy('p2', 'a2', 2, { requestId: 'r1', assigned: { listings: {}, sales: { 1460021001: 2 } } }),
+    /* a past event's lot nobody said was sold: it shows as unsold */
+    p3: buy('p3', 'a3', 10, { eventKey: SEN_KEY, sectorId: null, price: 3000, boughtOn: '2026-10-01', assigned: { listings: {}, sales: {}, seats: 'tables 41-45' } }),
     p9: Object.assign(buy('p9', 'a9', 3), { userId: MATE })
   };
   /* the saved viagogo scans, as the list syncs them: without their rows */

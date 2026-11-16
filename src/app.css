@@ -230,3 +230,11 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
     animation-duration: .01ms !important; transition-duration: .01ms !important;
   }
 }
+
+/* something just added or opened: a short glow so the eye finds it */
+.flash { animation: flash-in 1.8s ease-out; }
+@keyframes flash-in {
+  0%, 25% { box-shadow: 0 0 0 2px var(--accent); background-color: var(--accent-soft); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--accent); } }

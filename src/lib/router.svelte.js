@@ -16,15 +16,35 @@
  * closing it, by any means, brings the one under it back, as a native
  * stack would. Going to the sheet it came from just goes back, so moving
  * between a sector and its request never piles up.
+ *
+ * The open sheet (and the ones under it) is kept on the phone. A link out
+ * (viagogo, the ticket site) opens the phone's browser view; closing it can
+ * reload the installed app, which would lose the sheet. On the reload the
+ * sheet comes back, if it was open on the same page within the last hour.
  * ------------------------------------------------------------------ */
 import { flushSync } from 'svelte';
 
-export const TABS = ['now', 'events', 'money', 'inbox'];
-const DEPTH = { now: 0, events: 0, money: 0, inbox: 0, settings: 1, event: 1, vg: 1, add: 2, map: 2, accounts: 2 };
+export const TABS = ['now', 'events', 'inventory', 'money', 'inbox'];
+const DEPTH = { now: 0, events: 0, inventory: 0, money: 0, inbox: 0, settings: 1, event: 1, vg: 1, add: 2, map: 2, accounts: 2 };
 
 /* the same sheet, whatever tab it was on */
 const sameSheet = (a, b) => !!a && !!b && a.kind === b.kind && (a.id ?? null) === (b.id ?? null) &&
   (a.eventKey ?? null) === (b.eventKey ?? null) && String(a.sectorId ?? '') === String(b.sectorId ?? '');
+const SAVED = 'st.sheet';
+const SAVED_FOR = 60 * 60000;
+function readSaved() {
+  try {
+    const x = JSON.parse(localStorage.getItem(SAVED) || 'null');
+    return x && x.sheet && x.hash === location.hash && Date.now() - x.at < SAVED_FOR ? x.sheet : null;
+  } catch (e) { return null; }
+}
+function writeSaved(sheet) {
+  try {
+    if (sheet) localStorage.setItem(SAVED, JSON.stringify({ sheet, hash: location.hash, at: Date.now() }));
+    else localStorage.removeItem(SAVED);
+  } catch (e) { /* private mode: nothing kept */ }
+}
+
 /* at most `n` sheets remembered under this one */
 const keep = (s, n) => (s && n > 0 ? Object.assign({}, s, { back: keep(s.back, n - 1) }) : null);
 
@@ -48,6 +68,16 @@ class Router {
   stack = [typeof location === 'undefined' ? '' : location.hash];
 
   start() {
+    /* back from a reload (the browser view closing, a new version): the sheet that was open */
+    const saved = readSaved();
+    if (saved) {
+      this.sheet = saved;
+      if (!(history.state && history.state.sheet)) history.pushState({ sheet: true }, '');
+    } else writeSaved(null);
+    $effect.root(() => { $effect(() => { writeSaved(this.sheet ? $state.snapshot(this.sheet) : null); }); });
+    /* the time counts from leaving the app, not from opening the sheet */
+    addEventListener('pagehide', () => writeSaved(this.sheet ? $state.snapshot(this.sheet) : null));
+    document.addEventListener('visibilitychange', () => { if (document.hidden) writeSaved(this.sheet ? $state.snapshot(this.sheet) : null); });
     addEventListener('hashchange', () => {
       const h = location.hash;
       if (this.stack.length > 1 && this.stack[this.stack.length - 2] === h) this.stack.pop();
@@ -124,5 +154,6 @@ export const href = {
   add: key => '#/add' + (key ? '?event=' + encodeURIComponent(key) : ''),
   map: (key, view) => '#/map/' + encodeURIComponent(key) + (view ? '?view=' + view : ''),
   accounts: () => '#/accounts',
+  inventory: () => '#/inventory',
   vg: id => '#/vg' + (id ? '/' + encodeURIComponent(id) : '')
 };

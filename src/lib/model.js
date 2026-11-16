@@ -8,7 +8,7 @@
  * no DOM.
  * ------------------------------------------------------------------ */
 import { SK } from './sk.js';
-import { stockOf } from './stock.js';
+import { lotsOf, buyOfLots } from './lots.js';
 
 export const ONLINE_MS = 2 * 60000;
 const ACTIVE_LISTING = /^(active|pending|live)/i;
@@ -422,7 +422,8 @@ export function buildView(m, me, opts = {}) {
       : (ev && sectorId ? buyOf(m, r, ev, sectorId, l) : null);
     const req = r ? requests.find(x => x.id === r.id) : null;
     return {
-      id: l.id, title: l.title, when: l.when, section: l.section, row: l.row, status: l.status,
+      id: l.id, title: l.title, when: l.when, section: l.section, row: l.row, status: l.status, vgEventId: l.vgEventId || '',
+      uploaded: l.uploaded === true ? true : l.uploaded === false ? false : null,
       sectorId: sectorId || null, requestId: r ? r.id : null, num: r ? r.num : null, done: r ? r.done : false,
       code: r ? codeOf(m, r) : ((sectorOf(ev, sectorId) || {}).code || l.section),
       reqStatus: req ? req.status : null,
@@ -478,7 +479,47 @@ export function buildView(m, me, opts = {}) {
     return r && Number(amount) > 0 ? Number(amount) * r : null;
   };
   const rateNow = c => SK.profit.rateOf(ratesAt(m, now).rates, c);
-  for (const ev of events) ev.stock = stockOf({ ev, purchases, requests, listings, sales, lekOf, isPaid: SK.sales.isPaid, rateNow });
+  const inventory = lotsOf({ events, purchases, listings, sales, lekOf, rateNow, isPaid: SK.sales.isPaid, now });
+  for (const ev of events) ev.stock = inventory.byKey[ev.key] || null;
+
+  /* Tickets that came from a lot cost what the lot paid: that price wins
+   * for them, over one typed on the listing or the site's. Tickets no lot
+   * covers keep the old buy price; with none, the lots' price stands for
+   * them too (and the source says so). */
+  const withLots = (lb, total, old, at) => {
+    if (!lb) return null;
+    const all = lb.qty >= total;
+    if (all || !old || !(Number(old.amount) > 0)) {
+      return { amount: lb.amount, currency: lb.currency, source: all ? 'your lot' : `your lot (${lb.qty} of ${total})`, fromLots: lb.qty };
+    }
+    const rates = ratesAt(m, at).rates;
+    const rl = SK.profit.rateOf(rates, lb.currency), ro = SK.profit.rateOf(rates, old.currency || SK.profit.BASE);
+    if (!rl || !ro) return { amount: lb.amount, currency: lb.currency, source: `your lot (${lb.qty} of ${total})`, fromLots: lb.qty };
+    const amount = (lb.qty * lb.amount * rl + (total - lb.qty) * Number(old.amount) * ro) / total;
+    return { amount: Math.round(amount), currency: SK.profit.BASE, source: `your lot for ${lb.qty}, ${old.source} for ${total - lb.qty}`, fromLots: lb.qty };
+  };
+  for (const s of sales) {
+    const lb = buyOfLots(inventory.saleLots[s.id]);
+    const buy = withLots(lb, Number(s.tickets) || 0, s.buy, Date.parse(s.soldOn) || s.seenAt);
+    if (!buy) continue;
+    const at = ratesAt(m, Date.parse(s.soldOn) || s.seenAt);
+    s.buy = buy;
+    s.money = Object.assign(SK.sales.saleMoney(s, buy, at.rates), { rateDay: at.day });
+  }
+  for (const l of listings) {
+    const c = inventory.cover[l.id];
+    if (!c || !c.lots.length) continue;
+    const listed = c.lots.reduce((n, x) => n + x.listed, 0);
+    const lb = buyOfLots(c.lots.map(x => ({ lot: x.lot, qty: listed ? x.listed : x.qty })));
+    const total = listed ? Math.max(listed, Number(l.tickets) || 0) : Math.max(lb ? lb.qty : 0, Number(l.tickets) || 0);
+    const buy = withLots(lb, total, l.buy, l.seenAt);
+    if (!buy || !m.listings[l.id]) continue;
+    l.buy = buy;
+    l.money = moneyOf(m, m.listings[l.id], buy);
+    /* the request on this listing shows the same money */
+    const r = l.requestId ? requests.find(x => x.id === l.requestId) : null;
+    if (r) { r.buy = buy; r.profit = l.money; }
+  }
 
   const team = [...new Set(m.members.map(x => x.userId).concat(Object.keys(m.profiles)))]
     .map(uid => ({ userId: uid, name: ownerName(uid), me: uid === me }))
@@ -496,7 +537,7 @@ export function buildView(m, me, opts = {}) {
     .map(t => Object.assign({}, t, { owner: ownerName(t.userId) }));
 
   return {
-    me, settings, events, requests, listings, sales, lastSales, devices, team, teamListings, accounts, purchases, vgEvents,
+    me, settings, events, requests, listings, sales, lastSales, devices, team, teamListings, accounts, purchases, vgEvents, inventory,
     open, attention,
     pcsOnline: devices.filter(d => d.online),
     snoozeUntil: (m.profiles[me] || {}).snoozeUntil || 0,

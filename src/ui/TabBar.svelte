@@ -6,6 +6,7 @@
   const tabs = [
     { name: 'now', label: 'Now', icon: 'now' },
     { name: 'events', label: 'Events', icon: 'events' },
+    { name: 'inventory', label: 'Inventory', icon: 'ticket' },
     { name: 'money', label: 'Money', icon: 'money' },
     { name: 'inbox', label: 'Inbox', icon: 'inbox' }
   ];
@@ -46,7 +47,7 @@
 <style>
   .tabbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-    display: grid; grid-template-columns: repeat(4, 1fr);
+    display: grid; grid-template-columns: repeat(5, 1fr);
     height: calc(var(--tabbar-h) + var(--safe-b)); padding: 0 var(--safe-r) var(--safe-b) var(--safe-l);
     background: var(--bar); border-top: 1px solid var(--line);
     -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);

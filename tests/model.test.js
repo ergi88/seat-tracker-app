@@ -235,6 +235,7 @@ test('price list: a typed price beats the site\'s, which beats what you paid; a 
   assert.ok(site && bare, 'the demo has a sector with a site price and one without');
 
   m.sectorPrices = { 'ebileta:2160': { [site.id]: { amount: 4500, currency: 'ALL' }, 12: { amount: 3800, currency: 'ALL' } } };
+  m.purchases.p1 = Object.assign({}, m.purchases.p1, { assigned: { listings: {}, sales: {} } });   // no lot on r1's listing: the list alone prices it
   m.purchases.p3 = { id: 'p3', userId: ME, accountId: 'a3', eventKey: 'ebileta:2160', requestId: null, sectorId: bare.id, qty: 1,
     price: 2500, currency: 'ALL', boughtOn: '2026-10-01', orderRef: '', notes: '', createdAt: NOW };
   const v = buildView(m, ME, { now: NOW });

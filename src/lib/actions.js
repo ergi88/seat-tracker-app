@@ -446,34 +446,74 @@ export async function setSectorPrice(eventKey, sectorId, amount, currency) {
   return price;
 }
 
+/* the database before the inventory's columns: say what to do, not PostgREST's words */
+const needSchema = e => {
+  if (/assigned|vg_event_id|event_title|'section'|purchases_event_check|event_key.*null/i.test(String(e && e.message))) {
+    throw new Error('Run schema.sql again in Supabase: this database has no inventory lots yet.');
+  }
+  throw e;
+};
+
+/* where a lot's tickets went, cleaned: whole numbers above 0, no more than the lot */
+function cleanAssigned(a, qty) {
+  const clean = o => Object.fromEntries(Object.entries(o || {}).map(([k, q]) => [String(k), Math.round(Number(q))]).filter(([, q]) => q > 0));
+  const text = (x, n) => String(x === null || x === undefined ? '' : x).trim().slice(0, n);
+  const other = (Array.isArray(a && a.other) ? a.other : []).slice(0, 50).map(x => {
+    const price = Number(x.price) > 0 ? Math.round(Number(x.price) * 100) / 100 : null;
+    return {
+      id: text(x.id, 40) || U.newId('o'), qty: U.clampInt(x.qty, 1, 1, 999), price,
+      currency: SK.profit.CURRENCIES.includes(x.currency) ? x.currency : 'ALL',
+      on: DATE.test(x.on || '') ? x.on : '', where: text(x.where, 60), seats: text(x.seats, 80)
+    };
+  });
+  const out = {
+    listings: clean(a && a.listings), sales: clean(a && a.sales),
+    seats: text(a && a.seats, 80),
+    notes: Object.fromEntries(Object.entries((a && a.notes) || {}).map(([k, t]) => [String(k), text(t, 80)]).filter(([, t]) => t).slice(0, 200)),
+    other
+  };
+  const placed = [...Object.values(out.listings), ...Object.values(out.sales), ...other.map(x => x.qty)].reduce((n, q) => n + q, 0);
+  if (placed > qty) throw new Error(`${placed} tickets are put on listings and sales or sold elsewhere, but the lot has ${qty}.`);
+  return out;
+}
+
+/* A lot: a purchase for a tracked event (eventKey) or for a viagogo event
+ * nobody tracks (vgEventId + eventTitle + a typed section). */
 export async function savePurchase(fields) {
   const userId = me();
   const account = (store.mirror.accounts || {})[fields.accountId];
   if (!account || account.userId !== userId) throw new Error('Pick an account.');
-  if (!store.mirror.events[fields.eventKey]) throw new Error('That event is no longer tracked.');
+  const vgEventId = String(fields.vgEventId || '').replace(/\D/g, '');
+  if (fields.eventKey && !store.mirror.events[fields.eventKey]) throw new Error('That event is no longer tracked.');
+  if (!fields.eventKey && !vgEventId) throw new Error('Pick the event.');
   const price = fields.price === '' || fields.price === null || fields.price === undefined || !(Number(fields.price) > 0)
     ? null : Math.round(Number(fields.price) * 100) / 100;
+  const qty = U.clampInt(fields.qty, 1, 1, 999);
   const row = {
     account_id: account.id,
-    event_key: fields.eventKey,
-    request_id: fields.requestId || null,
-    sector_id: fields.sectorId ? String(fields.sectorId) : null,
-    qty: U.clampInt(fields.qty, 1, 1, 999),
+    event_key: fields.eventKey || null,
+    vg_event_id: fields.eventKey ? '' : vgEventId,
+    event_title: fields.eventKey ? '' : String(fields.eventTitle || '').trim().slice(0, 200),
+    section: String(fields.section || '').trim().slice(0, 40),
+    request_id: (fields.eventKey && fields.requestId) || null,
+    sector_id: fields.eventKey && fields.sectorId ? String(fields.sectorId) : null,
+    qty,
     price,
     currency: SK.profit.CURRENCIES.includes(fields.currency) ? fields.currency : 'ALL',
     bought_on: DATE.test(fields.boughtOn || '') ? fields.boughtOn : new Date().toISOString().slice(0, 10),
     order_ref: String(fields.orderRef || '').trim(),
-    notes: String(fields.notes || '').trim()
+    notes: String(fields.notes || '').trim(),
+    assigned: cleanAssigned(fields.assigned, qty)
   };
   const before = fields.id ? (store.mirror.purchases || {})[fields.id] : null;
-  const saved = fields.id
-    ? await must(supa.from('purchases').update(row).eq('id', fields.id).select().maybeSingle())
-    : await must(supa.from('purchases').insert([Object.assign({ id: U.newId('p'), user_id: userId }, row)]).select().single());
-  if (!saved) throw new Error('That purchase no longer exists.');
+  const saved = await (fields.id
+    ? must(supa.from('purchases').update(row).eq('id', fields.id).select().maybeSingle())
+    : must(supa.from('purchases').insert([Object.assign({ id: U.newId('p'), user_id: userId }, row)]).select().single())).catch(needSchema);
+  if (!saved) throw new Error('That lot no longer exists.');
   const p = toPurchase(saved);
   store.mutate(m => { (m.purchases = m.purchases || {})[p.id] = p; });
   /* a price paid where the list and the site know none: the list learns it */
-  if (p.sectorId && p.price > 0 && !((store.mirror.sectorPrices || {})[p.eventKey] || {})[p.sectorId]) {
+  if (p.eventKey && p.sectorId && p.price > 0 && !((store.mirror.sectorPrices || {})[p.eventKey] || {})[p.sectorId]) {
     const ev = store.mirror.events[p.eventKey];
     const sec = ev && (ev.sectors || []).find(s => String(s.id) === p.sectorId);
     const summary = ((store.mirror.scanMeta[p.eventKey] || {})[p.sectorId] || {}).summary;

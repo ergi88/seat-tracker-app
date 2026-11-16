@@ -91,7 +91,8 @@
       <h2 class="section-title">{g.title}{#if g.time !== null}<span class="days">{' · ' + fromToday(g.time)}</span>{/if}</h2>
       <div class="group">
         {#each g.items as l (l.id)}
-          <button class="row" onclick={() => router.openSheet({ kind: 'listing', id: l.id })}>
+          <!-- no buy price yet: straight to where it is typed -->
+          <button class="row" onclick={() => router.openSheet({ kind: 'listing', id: l.id, tab: l.money && l.money.missing === 'buy' ? 'money' : null })}>
             <span class="dot {l.reqStatus ? tone(l.reqStatus) : ''}"></span>
             <span class="grow">
               <span class="title">{l.code} <span class="muted num">× {l.tickets ?? '?'}</span></span>
@@ -100,7 +101,8 @@
             {#if l.money && !l.money.missing}
               <span class="right num {l.money.total >= 0 ? 'ok' : 'bad'}">{lek(l.money.total, true)}<small>{win(l.money.winRate)}</small></span>
             {:else}
-              <span class="right muted small">{l.money && l.money.missing === 'buy' ? 'no buy price' : '—'}</span>
+              {#if l.money && l.money.missing === 'buy'}<span class="right add small">+ buy price</span>
+              {:else}<span class="right muted small">—</span>{/if}
             {/if}
           </button>
         {/each}
@@ -146,4 +148,5 @@
   .right small { font-weight: 500; font-size: 12px; opacity: .8; }
   .static { cursor: default; }
   .static:active { background: none; }
+  .right.add { color: var(--accent); font-weight: 650; }
 </style>

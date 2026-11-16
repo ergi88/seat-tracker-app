@@ -11,7 +11,8 @@
   import { router, href } from '../lib/router.svelte.js';
   import { addRequest } from '../lib/actions.js';
 
-  let { eventKey = '', sec = '' } = $props();
+  /* qty and cats (comma list) come from a sector's sheet: what was counted there */
+  let { eventKey = '', sec = '', qty: qtyIn = '', cats: catsIn = '' } = $props();
 
   const v = $derived(store.view);
   const events = $derived(v ? v.events.filter(e => !e.archived || e.key === eventKey) : []);
@@ -22,8 +23,10 @@
   // svelte-ignore state_referenced_locally
   let secText = $state(sec);                         // "Request here" on a sector hands its code over
   let secId = $state('');
-  let qty = $state(2);
-  let cats = $state([]);
+  // svelte-ignore state_referenced_locally
+  let qty = $state(Math.min(99, Math.max(1, Number(qtyIn) || 2)));
+  // svelte-ignore state_referenced_locally
+  let cats = $state(String(catsIn || '').split(',').map(x => x.trim()).filter(Boolean));
   let client = $state('');
   let listing = $state('');
   let together = $state(true);

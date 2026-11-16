@@ -3,6 +3,7 @@
    * viagogo listing (what you sell), or both. Either half may be missing:
    * a request not listed yet, or a listing nobody tracks. The head stays put
    * (who, where to go, how it stands, the tabs); the tabs scroll. */
+  import { untrack } from 'svelte';
   import Sheet from '../ui/Sheet.svelte';
   import Stepper from '../ui/Stepper.svelte';
   import Icon from '../ui/Icon.svelte';
@@ -45,9 +46,19 @@
   /* what was bought for this request, by which account; a purchase opens over this sheet */
   const buys = $derived(r && v ? v.purchases.filter(p => p.requestId === r.id).map(p => ({ p, a: v.accounts.find(a => a.id === p.accountId) })) : []);
   const addPurchase = () => router.swapSheet({ kind: 'purchase', eventKey: r.eventKey, requestId: r.id }, { tab });
+  /* the lots this listing's tickets come from, and what no lot covers yet */
+  const cov = $derived(l && v && v.inventory ? v.inventory.cover[l.id] || null : null);
+  const covLots = $derived(cov ? cov.lots.map(x => ({ ...x, email: (v.accounts.find(a => a.id === x.lot.p.accountId) || {}).email || 'deleted account' })) : []);
+  const noLot = $derived(cov ? cov.sold + cov.listed : 0);
+  const addLotFor = () => router.swapSheet({ kind: 'purchase', listingId: l.id }, { tab });
   const openPurchase = id => router.swapSheet({ kind: 'purchase', id }, { tab });
 
   let tab = $state(firstTab || (requestId ? 'seats' : 'listing'));
+  /* the open tab rides on the sheet, so a reload of the app (back from viagogo) reopens it */
+  $effect(() => {
+    const t = tab;
+    untrack(() => { const s = router.sheet; if (s && (s.kind === 'request' || s.kind === 'listing') && s.tab !== t) s.tab = t; });
+  });
   let busy = $state(false);
   const tone = $derived(r ? (r.done ? 'none' : r.tone) : 'none');
   /* bought: you have the tickets. It stands over the scan, so the scan's numbers and knobs wait */
@@ -81,6 +92,23 @@
     () => addRequest({ eventKey: l.eventKey, sec: l.sectorId, qty: Math.max(1, Number(l.tickets) || 1), listing: l.id }),
     req => `Tracking ${code} as #${req.num}`
   ).then(req => { if (req) tab = 'seats'; });
+
+  /* the prices the request watches (Posttick sells a block at several); none picked = every price */
+  /* the sector's prices with free seats at its last scan, and any already picked; all when not known */
+  const catList = $derived.by(() => {
+    if (!r || !ev || !ev.canPrices) return [];
+    const all = Object.values(ev.cats || {});
+    const sec = ev.sectors.find(x => x.id === String(r.sec));
+    const here = sec && sec.summary && Array.isArray(sec.summary.cats) ? sec.summary.cats.map(String) : null;
+    if (!here || !here.length) return all;
+    const keep = new Set([...here, ...r.cats.map(String)]);
+    return all.filter(c => keep.has(String(c.key)));
+  });
+  function toggleCat(k) {
+    const now = r.cats.map(String);
+    const next = now.includes(k) ? now.filter(x => x !== k) : [...now, k];
+    act(() => updateRequest(r.id, { cats: next }), next.length ? `#${r.num} watches ${next.length === 1 ? '1 price' : next.length + ' prices'}` : `#${r.num} watches every price`);
+  }
 
   let linkInput = $state('');
   const linkListing = () => act(() => updateRequest(r.id, { listing: linkInput }), 'Listing linked').then(() => { linkInput = ''; });
@@ -204,7 +232,9 @@
             <span class="s">a ticket · {winText(mon.winRate)}</span>
           {:else}
             <b class="big muted">—</b>
-            <span class="s">{!l ? 'not listed yet' : l.money && l.money.missing === 'buy' ? 'no buy price' : 'no rate yet'}</span>
+            {#if l && l.money && l.money.missing === 'buy'}
+              <button class="s plus linkish" onclick={() => (tab = 'money')}>+ Buy price</button>
+            {:else}<span class="s">{!l ? 'not listed yet' : 'no rate yet'}</span>{/if}
           {/if}
         </div>
       </div>
@@ -238,6 +268,18 @@
           <div class="line"><span>Tickets wanted</span><Stepper value={r.qty} onchange={n => act(() => updateRequest(r.id, { qty: n }))} /></div>
           <!-- a bought request never warns: these wait, kept, until it is tracked again -->
           {#if !bought}
+            {#if catList.length}
+              <div class="line cats-line"><span>Prices<small>{r.cats.length ? 'only the picked' : 'none picked = every price'}</small></span>
+                <div class="cats">
+                  {#each catList as c (c.key)}
+                    <button type="button" class="cat" class:on={r.cats.map(String).includes(String(c.key))} disabled={busy}
+                      aria-pressed={r.cats.map(String).includes(String(c.key))} onclick={() => toggleCat(String(c.key))}>
+                      {#if c.color}<i style:background={c.color}></i>{/if}{SK.rules.priceText(ev.cats, c.key, ev.currency)}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            {/if}
             <label class="line"><span>Side by side</span><input type="checkbox" checked={r.together} onchange={e => act(() => updateRequest(r.id, { together: e.currentTarget.checked }))} /></label>
             <label class="line"><span>Block warn</span><input class="input mini num" type="number" inputmode="numeric" value={r.warn} onchange={e => field('warn', e.currentTarget.value)} /></label>
             <label class="line"><span>Options warn</span><input class="input mini num" type="number" inputmode="numeric" value={r.opts} onchange={e => field('opts', e.currentTarget.value)} /></label>
@@ -315,6 +357,24 @@
               <p class="tiny muted">Only the app's copy changes. Change it on viagogo too: the next read of your listings page on a PC writes viagogo's numbers over these.</p>
             </div>
           {/if}
+          <h3 class="section-title">Lots{cov ? ` · ${covLots.reduce((n, x) => n + x.sold + x.listed, 0)} of ${covLots.reduce((n, x) => n + x.sold + x.listed, 0) + noLot} tickets covered` : ''}</h3>
+          <div class="box">
+            {#each covLots as x (x.lot.id)}
+              <button class="line buy" onclick={() => openPurchase(x.lot.id)}>
+                <span class="grow lotline"><b>{x.lot.code || 'Lot'} · {x.qty} on this listing</b>
+                  <small>{x.sold ? `${x.sold} sold · ` : ''}{x.listed ? `${x.listed} listed · ` : ''}{Number(x.lot.p.price) > 0 ? `${money(x.lot.p.price, x.lot.p.currency)} each` : 'no price'} · {x.email}</small></span>
+                <Icon name="chev" size={16} />
+              </button>
+            {/each}
+            {#if noLot}
+              <div class="line nolot"><span class="grow lotline"><b>{noLot} with no lot</b><small>{cov.sold ? `${cov.sold} sold` : ''}{cov.sold && cov.listed ? ' · ' : ''}{cov.listed ? `${cov.listed} listed` : ''} · still to buy</small></span></div>
+            {:else if !covLots.length}
+              <div class="line nolot"><span class="grow lotline"><b>No lot behind it</b><small>Nothing listed or sold here yet</small></span></div>
+            {/if}
+            <button class="line add-buy" onclick={addLotFor}><Icon name="plus" size={18} /> {covLots.length ? 'Add another lot' : 'Add lot'}</button>
+          </div>
+          <p class="tiny muted pad">A lot's price is this listing's buy price for its tickets.</p>
+
           <div class="box">
             <div class="kv row"><span>You'll get</span><b class="num">{money(l.payout, l.currency)}{l.tickets ? ` · ${money(l.payout / l.tickets, l.currency)} a ticket` : ''}</b></div>
             <div class="kv row"><span>Listing</span><b class="num">{l.id}</b></div>
@@ -364,7 +424,7 @@
             {#each P.CURRENCIES as c}<option value={c}>{c}</option>{/each}
           </select></label>
       </div>
-      <p class="tiny muted pad">{Number(typedBuy) > 0 ? 'Typed by you.' : buy ? `Empty uses the ${buy.source}: ${money(buy.amount, buy.currency)}.` : 'Type what one ticket cost to see the money.'}{l && r ? ' One price for the request and its listing.' : ''}</p>
+      <p class="tiny muted pad">{#if buy && buy.fromLots}Uses {buy.source}: {money(buy.amount, buy.currency)} a ticket.{Number(typedBuy) > 0 ? ' Your typed price counts only for tickets no lot covers.' : ''}{:else}{Number(typedBuy) > 0 ? 'Typed by you.' : buy ? `Empty uses the ${buy.source}: ${money(buy.amount, buy.currency)}.` : 'Type what one ticket cost to see the profit and the multiplier, also for an event nobody tracks.'}{/if}{l && r ? ' One price for the request and its listing.' : ''}</p>
 
       <h3 class="section-title">Calculator</h3>
       <div class="calc">
@@ -571,4 +631,15 @@
 
   .fields { display: grid; gap: 12px; }
   .fields:empty { display: none; }
+  .cats-line { flex-wrap: wrap; align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
+  .cats-line > span { display: grid; }
+  .cats-line small { font-size: 11px; color: var(--muted); font-weight: 500; }
+  .cats { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; flex: 1; }
+  .cat { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 12px; border-radius: 99px; border: 1.5px solid var(--line); background: var(--panel); color: var(--ink); font-weight: 600; font-size: 13px; cursor: pointer; }
+  .cat i { width: 10px; height: 10px; border-radius: 50%; }
+  .cat.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .lotline { display: grid; min-width: 0; text-align: left; }
+  .lotline small { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .nolot b { color: var(--s-low); }
+  .linkish { border: 0; background: none; padding: 0; cursor: pointer; font: inherit; text-align: left; }
 </style>
